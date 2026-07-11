@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Household Notes</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --bg: #F6E3E5;
+    --card: #FFFFFF;
+    --ink: #263029;
+    --muted: #6B7568;
+    --line: #EBC9CD;
+    --rose: #B4636F;
+    --rose-bg: #F0D3D7;
+    --gold: #C08A2E;
+    --gold-bg: #F5E4BE;
+    --sage: #7C9075;
+    --sage-bg: #E4EBDF;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+  }
+
+  #app {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 0 48px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .header-icons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .home-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.1);
+    text-decoration: none;
+    color: var(--ink);
+    flex-shrink: 0;
+    transition: transform 0.12s ease;
+  }
+  .home-btn:active { transform: scale(0.92); }
+
+  .header {
+    padding: 28px 20px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .header-text h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 24px;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.01em;
+  }
+
+  .header-text .date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .board-wrap {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+  }
+
+  .section {
+    margin: 0 16px 16px 16px;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 18px 18px 14px;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.06);
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 6px 0;
+  }
+
+  .section h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 18px;
+    margin: 0 0 12px 0;
+  }
+
+  /* Add-note row */
+  .add-row {
+    display: flex;
+    gap: 8px;
+  }
+  .add-input {
+    flex: 1;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    padding: 11px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+    min-width: 0;
+  }
+  .add-input:focus {
+    border-color: var(--rose);
+  }
+  .add-btn {
+    width: 44px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    border: none;
+    background: var(--rose);
+    color: white;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.12s ease;
+  }
+  .add-btn:active { transform: scale(0.92); }
+
+  /* List */
+  .task-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 2px 10px 10px;
+    border-bottom: 1px solid var(--line);
+    border-left: 4px solid var(--line);
+    user-select: none;
+  }
+  .task-row:last-child { border-bottom: none; }
+
+  .checkbox {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    border: 2px solid var(--muted);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.18s ease;
+    background: transparent;
+    cursor: pointer;
+    margin-top: 1px;
+  }
+  .checkbox svg { opacity: 0; transform: scale(0.5); transition: all 0.18s ease; }
+  .checkbox.checked { background: var(--rose); border-color: var(--rose); }
+  .checkbox.checked svg { opacity: 1; transform: scale(1); }
+
+  .task-label {
+    flex: 1;
+    font-size: 15px;
+    line-height: 1.35;
+    transition: color 0.18s ease, opacity 0.18s ease;
+    cursor: pointer;
+    word-break: break-word;
+  }
+  .task-row.done .task-label { color: var(--muted); opacity: 0.65; text-decoration: line-through; text-decoration-color: var(--muted); }
+
+  .note-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .added-by {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    opacity: 0.7;
+    margin-top: 2px;
+  }
+
+  .priority-pill {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: none;
+    border-radius: 999px;
+    padding: 4px 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+    transition: transform 0.1s ease;
+    margin-top: 1px;
+  }
+  .priority-pill:active { transform: scale(0.94); }
+
+  .note-input {
+    flex: 1;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    line-height: 1.35;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    outline: none;
+    padding: 2px 0;
+    margin: 0;
+    min-width: 0;
+    width: 100%;
+    resize: none;
+    overflow: hidden;
+    display: block;
+    transition: color 0.18s ease, opacity 0.18s ease;
+  }
+  .task-row.done .note-input { color: var(--muted); opacity: 0.65; text-decoration: line-through; text-decoration-color: var(--muted); }
+
+  .note-comment-input {
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+    font-size: 13.5px;
+    line-height: 1.4;
+    color: var(--ink);
+    border: none;
+    border-top: 1px dashed var(--line);
+    background: transparent;
+    outline: none;
+    padding: 6px 0 2px 0;
+    margin-top: 4px;
+    resize: none;
+    overflow: hidden;
+    display: block;
+  }
+  .note-comment-input::placeholder { color: var(--muted); opacity: 0.75; }
+
+  .remove-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease;
+  }
+  .remove-btn:hover { opacity: 1; background: var(--rose-bg); color: var(--rose); }
+
+  .empty-state {
+    padding: 22px 2px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    font-style: italic;
+  }
+
+  .footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 4px 2px 0;
+    padding-top: 4px;
+  }
+  .count-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .clear-btn {
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--rose);
+    background: none;
+    border: none;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 4px 0;
+  }
+  .clear-btn:disabled {
+    color: var(--muted);
+    text-decoration: none;
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .grace {
+    margin: 24px 20px 0;
+    padding: 16px 18px;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #1B1E1A;
+    --card: #242821;
+    --ink: #E9ECE4;
+    --muted: #93A18F;
+    --line: #33372E;
+    --rose: #E08A96;
+    --rose-bg: #3A2429;
+    --gold: #E0A94A;
+    --gold-bg: #3A2E17;
+    --sage: #9DBB92;
+    --sage-bg: #29332A;
+  }
+
+  .loading {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body style="margin:0;">
+<script src="theme.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="auth.js"></script>
+<script src="visits.js"></script>
+<script src="achievements.js"></script>
+<div id="app"></div>
+
+<script>
+(function() {
+  const ACCENTS = ['#B4636F', '#7C9075', '#C08A2E'];
+
+  function todayStr(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  function weekKey(d) {
+    // Weeks run Sunday through Saturday. Find the most recent Sunday on or
+    // before `d` and use that date as the key, so the reset always lands on
+    // Sunday — the old formula's boundary silently depended on what weekday
+    // January 1st fell on each year, which is why it drifted onto Saturday.
+    const daysSinceSunday = d.getDay(); // 0 = Sun ... 6 = Sat
+    const anchor = new Date(d.getFullYear(), d.getMonth(), d.getDate() - daysSinceSunday);
+    return anchor.getFullYear() + '-' + String(anchor.getMonth() + 1).padStart(2, '0') + '-' + String(anchor.getDate()).padStart(2, '0');
+  }
+
+  // Recomputes from the real current time on every call, rather than being
+  // frozen at page-load — otherwise a tab left open across a week rollover
+  // would keep thinking it's still last week and could push stale data.
+  function currentWeekKey() { return weekKey(new Date()); }
+
+  const now = new Date();
+  const today = todayStr(now);
+  const wk = weekKey(now);
+
+  const defaultState = {
+    weekKey: wk,
+    items: []
+    // each item: { id, text, done }
+  };
+
+  // In-memory only (not saved) — the priority for the *next* new note, set
+  // via the pill next to the add form. Not reset after adding.
+  let pendingNotePriority = 'medium';
+
+  let state = null;
+  const app = document.getElementById('app');
+  app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
+
+  // --- Firebase setup (same project as Tending Today, separate document) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyAzJ9EFIGW1l5-IgmrD2MyGTe8_WIcL3hs",
+    authDomain: "tendingtoday-f30e4.firebaseapp.com",
+    projectId: "tendingtoday-f30e4",
+    storageBucket: "tendingtoday-f30e4.firebasestorage.app",
+    messagingSenderId: "334824670755",
+    appId: "1:334824670755:web:c21c47bc292f8ed711d396",
+    measurementId: "G-LJ7XZP3FE1"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const docRef = db.collection('household').doc('household-notes-state');
+
+  // Priority tags — cycles Critical -> High -> Medium -> Low on tap, and
+  // drives auto-sort (lower index = higher priority = sorts first).
+  const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
+  const PRIORITY_META = {
+    critical: { label: 'Critical', color: 'var(--rose)', bg: 'var(--rose-bg)' },
+    high:     { label: 'High',     color: 'var(--gold)', bg: 'var(--gold-bg)' },
+    medium:   { label: 'Medium',   color: 'var(--sage)', bg: 'var(--sage-bg)' },
+    low:      { label: 'Low',      color: 'var(--muted)', bg: 'var(--line)' }
+  };
+  function priorityIndex(p) {
+    const idx = PRIORITY_ORDER.indexOf(p);
+    return idx === -1 ? PRIORITY_ORDER.indexOf('medium') : idx;
+  }
+  function nextPriority(p) {
+    const idx = priorityIndex(p);
+    return PRIORITY_ORDER[(idx + 1) % PRIORITY_ORDER.length];
+  }
+  function priorityPill(p, dataAttr) {
+    const meta = PRIORITY_META[p] || PRIORITY_META.medium;
+    return `<button type="button" class="priority-pill" style="color:${meta.color}; background:${meta.bg};" ${dataAttr} aria-label="Cycle priority">${meta.label}</button>`;
+  }
+
+  // Updates a pill button's own label/colors directly, without a full
+  // render() — used for the "pending priority" pill on the add-note form,
+  // so cycling the priority doesn't wipe out text already typed into the
+  // adjacent input (a full render() would rebuild it empty).
+  function patchPriorityPill(btn, priority) {
+    const meta = PRIORITY_META[priority] || PRIORITY_META.medium;
+    btn.textContent = meta.label;
+    btn.style.color = meta.color;
+    btn.style.background = meta.bg;
+  }
+
+  function normalizeAndReset(raw) {
+    let s = raw ? JSON.parse(JSON.stringify(raw)) : structuredClone(defaultState);
+    let changed = false;
+    const wkNow = currentWeekKey();
+    if (!Array.isArray(s.items)) { s.items = []; changed = true; }
+    s.items.forEach(it => {
+      if (typeof it.comment !== 'string') { it.comment = ''; changed = true; }
+      if (typeof it.addedBy !== 'string') { it.addedBy = ''; changed = true; }
+      if (!PRIORITY_ORDER.includes(it.priority)) { it.priority = 'medium'; changed = true; }
+    });
+    if (s.weekKey !== wkNow) {
+      // New week: completed notes clear out automatically, so you can see
+      // what got resolved this week without it piling up indefinitely.
+      s.weekKey = wkNow;
+      s.items = s.items.filter(it => !it.done);
+      changed = true;
+    }
+    return { s, changed };
+  }
+
+  function makeId() {
+    return 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  async function load() {
+    try {
+      const snap = await docRef.get();
+      const { s, changed } = normalizeAndReset(snap.exists ? snap.data() : null);
+      state = s;
+      if (changed || !snap.exists) {
+        await save();
+      }
+      render();
+
+      // Live sync: reflect changes from other devices instantly
+      docRef.onSnapshot((snapshot) => {
+        if (!snapshot.exists) return;
+        const { s: incoming, changed: needsWrite } = normalizeAndReset(snapshot.data());
+        state = incoming;
+        render();
+        if (needsWrite) save();
+      });
+    } catch (e) {
+      console.error('Firestore load failed', e);
+      state = structuredClone(defaultState);
+      app.innerHTML = '<div class="loading">Couldn\u2019t connect \u2014 check your connection and reload.</div>';
+    }
+  }
+
+  async function save() {
+    try {
+      // Guard against a tab left open across a week rollover: re-run the
+      // reset check against the current real date right before writing, so
+      // a stale tab can never push last week's leftover completed notes
+      // over a fresh week that another device (or a reload) already reset.
+      const { s: corrected, changed } = normalizeAndReset(state);
+      state = corrected;
+      await docRef.set(state);
+      if (window.trackPageUpdate) window.trackPageUpdate('notes');
+      if (changed) render();
+    } catch (e) {
+      console.error('Firestore save failed', e);
+    }
+  }
+
+  function pinboardSVG(fraction) {
+    // Pins fill the board as unresolved notes pile up, and clear off as they're resolved.
+    const pins = [
+      { cx: 20, cy: 20, r: 3.4, fill: '#B4636F', op: Math.min(1, fraction / 0.15) },
+      { cx: 36, cy: 20, r: 3.4, fill: '#7C9075', op: Math.min(1, Math.max(0,(fraction-0.12)) / 0.15) },
+      { cx: 28, cy: 16, r: 3.6, fill: '#C08A2E', op: Math.min(1, Math.max(0,(fraction-0.28)) / 0.15) },
+      { cx: 16, cy: 33, r: 3.2, fill: '#7C9075', op: Math.min(1, Math.max(0,(fraction-0.45)) / 0.15) },
+      { cx: 40, cy: 33, r: 3.2, fill: '#B4636F', op: Math.min(1, Math.max(0,(fraction-0.6)) / 0.15) },
+      { cx: 28, cy: 37, r: 3.6, fill: '#C08A2E', op: Math.min(1, Math.max(0,(fraction-0.78)) / 0.2) }
+    ];
+    const pinShapes = pins.map(p =>
+      `<circle cx="${p.cx}" cy="${p.cy}" r="${p.r}" fill="${p.fill}" style="opacity:${p.op}; transition: opacity 0.4s ease;"/>
+       <circle cx="${p.cx - p.r*0.3}" cy="${p.cy - p.r*0.3}" r="${p.r*0.28}" fill="white" style="opacity:${p.op * 0.7}; transition: opacity 0.4s ease;"/>`
+    ).join('');
+    return `<svg viewBox="0 0 56 56" width="56" height="56">
+      <rect x="8" y="6" width="40" height="44" rx="6" fill="#E7CFA0" stroke="#8A6417" stroke-width="2.5"/>
+      ${pinShapes}
+    </svg>`;
+  }
+
+  function checkIcon() {
+    return `<svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 7L5.5 10.5L12 3" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function homeIcon() {
+    return `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 7.5L8 2.5L14 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M4 6.5V13H12V6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function themeIcon() {
+    return window.currentTheme === 'dark'
+      ? `<svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.5V3.2"/><path d="M8 12.8V14.5"/><path d="M1.5 8H3.2"/><path d="M12.8 8H14.5"/><path d="M3.4 3.4L4.6 4.6"/><path d="M11.4 11.4L12.6 12.6"/><path d="M12.6 3.4L11.4 4.6"/><path d="M4.6 11.4L3.4 12.6"/></g></svg>`
+      : `<svg width="15" height="15" viewBox="0 0 16 16"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5A5 5 0 0 0 13.5 9.5Z" fill="currentColor"/></svg>`;
+  }
+
+  function sortByPriority(arr) {
+    return arr
+      .map((it, idx) => ({ it, idx }))
+      .sort((a, b) => {
+        const pa = priorityIndex(a.it.priority), pb = priorityIndex(b.it.priority);
+        if (pa !== pb) return pa - pb;
+        return a.idx - b.idx;
+      })
+      .map(x => x.it);
+  }
+
+  function render() {
+    const items = state.items;
+    const activeItems = sortByPriority(items.filter(it => !it.done));
+    const doneItems = sortByPriority(items.filter(it => it.done));
+    // Board fills up as active notes pile up, clears as they're resolved. Caps out around 6 pins.
+    const frac = Math.min(1, activeItems.length / 6);
+    const dateLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+
+    let html = '';
+    html += `<div class="header">
+      <div class="header-icons">
+        <a class="home-btn" href="home.html" aria-label="Home">${homeIcon()}</a>
+      </div>
+      <div class="header-text">
+        <h1>Household Notes</h1>
+        <div class="date">${dateLabel}</div>
+      </div>
+      <div class="board-wrap">${pinboardSVG(frac)}</div>
+    </div>`;
+
+    // Add note
+    html += `<div class="section">
+      <div class="eyebrow">Pin something up</div>
+      <div class="add-row">
+        <input type="text" class="add-input" id="new-note-input" placeholder="e.g. Ask landlord about lease renewal" autocomplete="off">
+        ${priorityPill(pendingNotePriority, 'data-cycle-pending-note-priority')}        <button class="add-btn" id="add-note-btn" aria-label="Add note">+</button>
+      </div>
+    </div>`;
+
+    // Active board
+    html += `<div class="section">
+      <div class="eyebrow">The Board</div>
+      <h2>On our minds</h2>`;
+
+    if (activeItems.length === 0) {
+      html += `<div class="empty-state">Nothing pinned yet \u2014 add something you don't want to forget.</div>`;
+    } else {
+      activeItems.forEach((it, i) => {
+        const accent = ACCENTS[i % ACCENTS.length];
+        html += `<div class="task-row" data-id="${it.id}" style="border-left-color:${accent};">
+          <div class="checkbox" data-check="${it.id}">${checkIcon()}</div>
+          ${priorityPill(it.priority, `data-cycle-note-priority="${it.id}"`)}
+          <div class="note-main">
+            <textarea class="note-input" rows="1" data-edit="${it.id}">${escapeHtml(it.text)}</textarea>
+            ${it.addedBy ? `<div class="added-by">\u2014 ${escapeHtml(it.addedBy)}</div>` : ''}
+          </div>
+          <button class="remove-btn" data-remove="${it.id}" aria-label="Remove note">\u00d7</button>
+        </div>`;
+      });
+      html += `<div class="count-label" style="margin-top:8px;">${activeItems.length} active note${activeItems.length === 1 ? '' : 's'}</div>`;
+    }
+    html += `</div>`;
+
+    // Completed this week
+    html += `<div class="section">
+      <div class="eyebrow">Resolved \u2014 Since Last Reset</div>
+      <h2>Completed this week</h2>`;
+
+    if (doneItems.length === 0) {
+      html += `<div class="empty-state">Nothing checked off yet this week.</div>`;
+    } else {
+      doneItems.forEach((it) => {
+        html += `<div class="task-row done" data-id="${it.id}" style="border-left-color:var(--line);">
+          <div class="checkbox checked" data-check="${it.id}">${checkIcon()}</div>
+          ${priorityPill(it.priority, `data-cycle-note-priority="${it.id}"`)}
+          <div class="note-main">
+            <textarea class="note-input" rows="1" data-edit="${it.id}">${escapeHtml(it.text)}</textarea>
+            ${it.addedBy ? `<div class="added-by">\u2014 ${escapeHtml(it.addedBy)}</div>` : ''}
+            <textarea class="note-comment-input" rows="1" placeholder="Add a comment (optional)" data-comment="${it.id}">${escapeHtml(it.comment)}</textarea>
+          </div>
+          <button class="remove-btn" data-remove="${it.id}" aria-label="Remove note">\u00d7</button>
+        </div>`;
+      });
+      html += `<div class="count-label" style="margin-top:8px;">${doneItems.length} completed this week</div>`;
+    }
+    html += `</div>`;
+
+    html += `<div class="grace">Anything worth remembering goes here \u2014 plans, reminders, things to bring up later. Checking one off moves it into "Completed this week" so you can see what got handled; that section clears itself automatically at the start of each new week.<br><br>Synced live across your household \u2014 anyone with this page open sees updates instantly.</div>`;
+
+    app.innerHTML = html;
+    bindEvents();
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/"/g, '&quot;');
+  }
+
+  function bindEvents() {
+
+    const input = app.querySelector('#new-note-input');
+    const addBtn = app.querySelector('#add-note-btn');
+
+    async function addNote() {
+      const text = input.value.trim();
+      if (!text) return;
+      state.items.push({ id: makeId(), text, done: false, priority: pendingNotePriority, addedBy: (window.getHouseholdUserLabel && window.getHouseholdUserLabel()) || '' });
+      input.value = '';
+      await save();
+      render();
+      const freshInput = app.querySelector('#new-note-input');
+      if (freshInput) freshInput.focus();
+    }
+
+    if (addBtn) addBtn.addEventListener('click', addNote);
+    if (input) input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addNote();
+    });
+
+    const pendingNotePriorityBtn = app.querySelector('[data-cycle-pending-note-priority]');
+    if (pendingNotePriorityBtn) pendingNotePriorityBtn.addEventListener('click', () => {
+      pendingNotePriority = nextPriority(pendingNotePriority);
+      patchPriorityPill(pendingNotePriorityBtn, pendingNotePriority);
+    });
+
+    app.querySelectorAll('[data-check]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = el.getAttribute('data-check');
+        const it = state.items.find(i => i.id === id);
+        if (it) {
+          it.done = !it.done;
+          if (window.recordAchievement) recordAchievement('note:resolved', it.done ? 1 : -1);
+        }
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-cycle-note-priority]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = el.getAttribute('data-cycle-note-priority');
+        const it = state.items.find(i => i.id === id);
+        if (it) it.priority = nextPriority(it.priority);
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-remove]').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = el.getAttribute('data-remove');
+        state.items = state.items.filter(i => i.id !== id);
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-edit]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const id = el.getAttribute('data-edit');
+        const it = state.items.find(i => i.id === id);
+        const val = el.value.trim();
+        if (it && val) { it.text = val; await save(); }
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-comment]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const id = el.getAttribute('data-comment');
+        const it = state.items.find(i => i.id === id);
+        if (it) {
+          it.comment = el.value.trim();
+          await save();
+        }
+        render();
+      });
+    });
+
+    app.querySelectorAll('textarea.note-input, textarea.note-comment-input').forEach(el => {
+      const autoGrow = () => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
+      autoGrow();
+      el.addEventListener('input', autoGrow);
+    });
+  }
+
+  requireHouseholdAuth(function() {
+    trackPageVisit('notes');
+    initTheme();
+    load();
+  });
+})();
+</script>
+
+</body>
+</html>

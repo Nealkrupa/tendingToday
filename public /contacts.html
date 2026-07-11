@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contacts</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --bg: #DDEEEA;
+    --card: #FFFFFF;
+    --ink: #263029;
+    --muted: #6B7568;
+    --line: #C3DFD8;
+    --rose: #B4636F;
+    --rose-bg: #F6E8EA;
+    --gold: #C08A2E;
+    --sage: #7C9075;
+    --teal: #3F7F73;
+    --teal-bg: #CFE7E0;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+  }
+
+  #app {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 0 48px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .header-icons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .home-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.1);
+    text-decoration: none;
+    color: var(--ink);
+    flex-shrink: 0;
+    transition: transform 0.12s ease;
+  }
+  .home-btn:active { transform: scale(0.92); }
+
+  .header {
+    padding: 28px 20px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .header-text h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 24px;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.01em;
+  }
+
+  .header-text .date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .book-wrap {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+  }
+
+  .section {
+    margin: 0 16px 16px 16px;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 18px 18px 14px;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.06);
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 6px 0;
+  }
+
+  .section h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 18px;
+    margin: 0 0 12px 0;
+  }
+
+  .add-input {
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    padding: 11px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+    margin-bottom: 8px;
+  }
+  .add-input:focus { border-color: var(--teal); }
+  .add-input:last-of-type { margin-bottom: 0; }
+
+  .add-btn-wide {
+    width: 100%;
+    margin-top: 10px;
+    border-radius: 12px;
+    border: none;
+    background: var(--teal);
+    color: white;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 11px 14px;
+    cursor: pointer;
+    transition: transform 0.12s ease;
+  }
+  .add-btn-wide:active { transform: scale(0.98); }
+
+  .contact-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 13px 2px;
+    border-bottom: 1px solid var(--line);
+  }
+  .contact-row:last-child { border-bottom: none; }
+
+  .contact-main { flex: 1; min-width: 0; }
+
+  .contact-name-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .contact-name-input {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 16px;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    outline: none;
+    padding: 2px 0;
+    flex: 1;
+    min-width: 90px;
+  }
+
+  .contact-tag-input {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--teal);
+    background: var(--teal-bg);
+    border: none;
+    padding: 3px 8px;
+    border-radius: 999px;
+    outline: none;
+    width: 110px;
+    min-width: 0;
+  }
+  .contact-tag-input::placeholder { color: var(--teal); opacity: 0.55; }
+
+  .contact-field-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .contact-field-input {
+    flex: 1;
+    font-size: 13.5px;
+    color: var(--ink);
+    border: none;
+    border-bottom: 1px dashed var(--line);
+    background: transparent;
+    outline: none;
+    padding: 3px 0;
+    min-width: 0;
+  }
+  .contact-field-input:focus { border-bottom-color: var(--teal); }
+  .contact-field-input::placeholder { color: var(--muted); opacity: 0.7; }
+
+  .icon-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--teal);
+    background: var(--teal-bg);
+    text-decoration: none;
+  }
+
+  .remove-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    transition: opacity 0.15s ease, background 0.15s ease;
+    margin-top: 2px;
+  }
+  .remove-btn:hover { opacity: 1; background: var(--rose-bg); color: var(--rose); }
+
+  .empty-state {
+    padding: 22px 2px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    font-style: italic;
+  }
+
+  .search-input {
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+    margin-bottom: 4px;
+  }
+  .search-input:focus { border-color: var(--teal); }
+
+  .count-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 10px 2px 0;
+  }
+
+  .grace {
+    margin: 24px 20px 0;
+    padding: 16px 18px;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #1B1E1A;
+    --card: #242821;
+    --ink: #E9ECE4;
+    --muted: #93A18F;
+    --line: #33372E;
+    --rose: #E08A96;
+    --rose-bg: #3A2429;
+    --gold: #E0A94A;
+    --sage: #9DBB92;
+    --teal: #5FAE9E;
+    --teal-bg: #1F3833;
+  }
+
+  .loading {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body style="margin:0;">
+<script src="theme.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="auth.js"></script>
+<script src="visits.js"></script>
+<div id="app"></div>
+
+<script>
+(function() {
+  const now = new Date();
+
+  const defaultState = {
+    contacts: []
+    // { id, name, phone, email, category }
+  };
+
+  let state = null;
+  let searchTerm = '';
+  const app = document.getElementById('app');
+  app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
+
+  // --- Firebase setup (same project as Tending Today, separate document) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyAzJ9EFIGW1l5-IgmrD2MyGTe8_WIcL3hs",
+    authDomain: "tendingtoday-f30e4.firebaseapp.com",
+    projectId: "tendingtoday-f30e4",
+    storageBucket: "tendingtoday-f30e4.firebasestorage.app",
+    messagingSenderId: "334824670755",
+    appId: "1:334824670755:web:c21c47bc292f8ed711d396",
+    measurementId: "G-LJ7XZP3FE1"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const docRef = db.collection('household').doc('contacts-state');
+
+  function normalize(raw) {
+    let s = raw ? JSON.parse(JSON.stringify(raw)) : structuredClone(defaultState);
+    if (!Array.isArray(s.contacts)) s.contacts = [];
+    return s;
+  }
+
+  function makeId() {
+    return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  async function load() {
+    try {
+      const snap = await docRef.get();
+      state = normalize(snap.exists ? snap.data() : null);
+      if (!snap.exists) {
+        await save();
+      }
+      render();
+
+      docRef.onSnapshot((snapshot) => {
+        if (!snapshot.exists) return;
+        state = normalize(snapshot.data());
+        render();
+      });
+    } catch (e) {
+      console.error('Firestore load failed', e);
+      state = structuredClone(defaultState);
+      app.innerHTML = '<div class="loading">Couldn\u2019t connect \u2014 check your connection and reload.</div>';
+    }
+  }
+
+  async function save() {
+    try {
+      await docRef.set(state);
+      if (window.trackPageUpdate) window.trackPageUpdate('contacts');
+    } catch (e) {
+      console.error('Firestore save failed', e);
+    }
+  }
+
+  function bookSVG(fraction) {
+    // Little tabs/cards fill in the address book as contacts are added.
+    const tabs = [
+      { y: 20, fill: '#B4636F', op: Math.min(1, fraction / 0.14) },
+      { y: 26, fill: '#C08A2E', op: Math.min(1, Math.max(0,(fraction-0.12)) / 0.14) },
+      { y: 32, fill: '#7C9075', op: Math.min(1, Math.max(0,(fraction-0.28)) / 0.14) },
+      { y: 38, fill: '#3F7F73', op: Math.min(1, Math.max(0,(fraction-0.45)) / 0.16) },
+      { y: 22, fill: '#B4636F', op: Math.min(1, Math.max(0,(fraction-0.65)) / 0.16), short: true },
+      { y: 28, fill: '#C08A2E', op: Math.min(1, Math.max(0,(fraction-0.82)) / 0.18), short: true }
+    ];
+    const tabShapes = tabs.map(t =>
+      `<rect x="${t.short ? 40 : 36}" y="${t.y}" width="${t.short ? 4 : 8}" height="4" rx="1.5" fill="${t.fill}" style="opacity:${t.op}; transition: opacity 0.4s ease;"/>`
+    ).join('');
+    return `<svg viewBox="0 0 56 56" width="56" height="56">
+      <rect x="12" y="10" width="30" height="38" rx="4" fill="#FFFFFF" stroke="#3F7F73" stroke-width="2.5"/>
+      <path d="M12 16 L42 16" stroke="#CFE7E0" stroke-width="2"/>
+      <circle cx="24" cy="26" r="4.5" fill="#CFE7E0"/>
+      <path d="M17 40 C17 34 31 34 31 40" fill="#CFE7E0"/>
+      ${tabShapes}
+    </svg>`;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/"/g, '&quot;');
+  }
+
+  function phoneIcon() {
+    return `<svg width="13" height="13" viewBox="0 0 16 16"><path d="M3 2.5C3 2 3.4 1.6 3.9 1.6H5.6C6 1.6 6.4 1.9 6.5 2.4L7 4.6C7.1 5 6.9 5.4 6.6 5.6L5.4 6.4C6.1 8.2 7.8 9.9 9.6 10.6L10.4 9.4C10.6 9.1 11 8.9 11.4 9L13.6 9.5C14.1 9.6 14.4 10 14.4 10.4V12.1C14.4 12.6 14 13 13.5 13C7.7 13 3 8.3 3 2.5Z" fill="currentColor"/></svg>`;
+  }
+
+  function mailIcon() {
+    return `<svg width="13" height="13" viewBox="0 0 16 16"><rect x="1.5" y="3.5" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M2 4.5L8 9L14 4.5" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
+
+  function homeIcon() {
+    return `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 7.5L8 2.5L14 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M4 6.5V13H12V6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function themeIcon() {
+    return window.currentTheme === 'dark'
+      ? `<svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.5V3.2"/><path d="M8 12.8V14.5"/><path d="M1.5 8H3.2"/><path d="M12.8 8H14.5"/><path d="M3.4 3.4L4.6 4.6"/><path d="M11.4 11.4L12.6 12.6"/><path d="M12.6 3.4L11.4 4.6"/><path d="M4.6 11.4L3.4 12.6"/></g></svg>`
+      : `<svg width="15" height="15" viewBox="0 0 16 16"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5A5 5 0 0 0 13.5 9.5Z" fill="currentColor"/></svg>`;
+  }
+
+  function render() {
+    const dateLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    const frac = Math.min(1, state.contacts.length / 10);
+
+    const sorted = [...state.contacts].sort((a, b) => a.name.localeCompare(b.name));
+    const term = searchTerm.trim().toLowerCase();
+    const filtered = term
+      ? sorted.filter(c =>
+          c.name.toLowerCase().includes(term) ||
+          (c.category || '').toLowerCase().includes(term) ||
+          (c.phone || '').toLowerCase().includes(term) ||
+          (c.email || '').toLowerCase().includes(term))
+      : sorted;
+
+    let html = '';
+    html += `<div class="header">
+      <div class="header-icons">
+        <a class="home-btn" href="home.html" aria-label="Home">${homeIcon()}</a>
+      </div>
+      <div class="header-text">
+        <h1>Contacts</h1>
+        <div class="date">${dateLabel}</div>
+      </div>
+      <div class="book-wrap">${bookSVG(frac)}</div>
+    </div>`;
+
+    // Add contact
+    html += `<div class="section">
+      <div class="eyebrow">Save Someone</div>
+      <h2>New contact</h2>
+      <input type="text" class="add-input" id="new-name" placeholder="Name">
+      <input type="tel" class="add-input" id="new-phone" placeholder="Phone (optional)">
+      <input type="email" class="add-input" id="new-email" placeholder="Email (optional)">
+      <input type="text" class="add-input" id="new-category" placeholder="Category, e.g. Vet, Plumber (optional)">
+      <button class="add-btn-wide" id="add-contact-btn">Add contact</button>
+    </div>`;
+
+    // List
+    html += `<div class="section">
+      <div class="eyebrow">The Book</div>
+      <h2>Everyone we call</h2>
+      <input type="text" class="search-input" id="search-input" placeholder="Search by name, category, phone, or email" value="${escapeHtml(searchTerm)}">`;
+
+    if (state.contacts.length === 0) {
+      html += `<div class="empty-state">No contacts saved yet \u2014 add the first number you don't want to lose.</div>`;
+    } else if (filtered.length === 0) {
+      html += `<div class="empty-state">No matches for "${escapeHtml(searchTerm)}".</div>`;
+    } else {
+      filtered.forEach(c => {
+        html += `<div class="contact-row" data-id="${c.id}">
+          <div class="contact-main">
+            <div class="contact-name-line">
+              <input type="text" class="contact-name-input" value="${escapeAttr(c.name)}" placeholder="Name" data-edit="${c.id}|name">
+              <input type="text" class="contact-tag-input" value="${escapeAttr(c.category || '')}" placeholder="Category" data-edit="${c.id}|category">
+            </div>
+            <div class="contact-field-row">
+              <input type="tel" class="contact-field-input" value="${escapeAttr(c.phone || '')}" placeholder="Phone" data-edit="${c.id}|phone">
+              ${c.phone ? `<a class="icon-btn" href="tel:${escapeAttr(c.phone)}" aria-label="Call">${phoneIcon()}</a>` : ''}
+            </div>
+            <div class="contact-field-row">
+              <input type="email" class="contact-field-input" value="${escapeAttr(c.email || '')}" placeholder="Email" data-edit="${c.id}|email">
+              ${c.email ? `<a class="icon-btn" href="mailto:${escapeAttr(c.email)}" aria-label="Email">${mailIcon()}</a>` : ''}
+            </div>
+          </div>
+          <button class="remove-btn" data-remove="${c.id}" aria-label="Remove contact">\u00d7</button>
+        </div>`;
+      });
+      html += `<div class="count-label">${state.contacts.length} contact${state.contacts.length === 1 ? '' : 's'}</div>`;
+    }
+    html += `</div>`;
+
+    html += `<div class="grace">Tap a phone number to call, or an email to start a message. Synced live across your household \u2014 anyone with this page open sees updates instantly.</div>`;
+
+    app.innerHTML = html;
+    bindEvents();
+  }
+
+  function bindEvents() {
+
+    const nameInput = app.querySelector('#new-name');
+    const phoneInput = app.querySelector('#new-phone');
+    const emailInput = app.querySelector('#new-email');
+    const categoryInput = app.querySelector('#new-category');
+    const addBtn = app.querySelector('#add-contact-btn');
+
+    async function addContact() {
+      const name = nameInput.value.trim();
+      if (!name) return;
+      state.contacts.push({
+        id: makeId(),
+        name,
+        phone: phoneInput.value.trim(),
+        email: emailInput.value.trim(),
+        category: categoryInput.value.trim()
+      });
+      await save();
+      render();
+    }
+
+    if (addBtn) addBtn.addEventListener('click', addContact);
+    [nameInput, phoneInput, emailInput, categoryInput].forEach(inp => {
+      if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addContact(); } });
+    });
+
+    const searchInput = app.querySelector('#search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        searchTerm = searchInput.value;
+        render();
+        const fresh = app.querySelector('#search-input');
+        if (fresh) {
+          fresh.focus();
+          fresh.setSelectionRange(fresh.value.length, fresh.value.length);
+        }
+      });
+    }
+
+    app.querySelectorAll('[data-remove]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = el.getAttribute('data-remove');
+        state.contacts = state.contacts.filter(c => c.id !== id);
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-edit]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const [id, field] = el.getAttribute('data-edit').split('|');
+        const c = state.contacts.find(x => x.id === id);
+        if (c) {
+          c[field] = el.value.trim();
+          await save();
+        }
+        render();
+      });
+    });
+  }
+
+  requireHouseholdAuth(function() {
+    trackPageVisit('contacts');
+    initTheme();
+    load();
+  });
+})();
+</script>
+
+</body>
+</html>

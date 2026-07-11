@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wishlist</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --bg: #EFE7F3;
+    --card: #FFFFFF;
+    --ink: #263029;
+    --muted: #6B7568;
+    --line: #DCCBE6;
+    --rose: #B4636F;
+    --rose-bg: #F6E8EA;
+    --gold: #C08A2E;
+    --gold-bg: #FBF1DE;
+    --sage: #7C9075;
+    --sage-bg: #E4EBDF;
+    --blue: #5B7B9A;
+    --blue-bg: #DCE7EF;
+    --plum: #8B6FA8;
+    --plum-bg: #E5DCEE;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+  }
+
+  #app {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 0 48px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .header-icons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .home-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.1);
+    text-decoration: none;
+    color: var(--ink);
+    flex-shrink: 0;
+    transition: transform 0.12s ease;
+  }
+  .home-btn:active { transform: scale(0.92); }
+
+  .header {
+    padding: 28px 20px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .header-text h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 24px;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.01em;
+  }
+
+  .header-text .date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .gift-wrap {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+  }
+
+  .section {
+    margin: 0 16px 16px 16px;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 18px 18px 14px;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.06);
+  }
+
+  .section.nat { background: var(--rose-bg); }
+  .section.neal { background: var(--blue-bg); }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 6px 0;
+  }
+
+  .section.nat .eyebrow { color: #92464F; }
+  .section.neal .eyebrow { color: #3F5A73; }
+
+  .section h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 18px;
+    margin: 0 0 12px 0;
+  }
+
+  /* Add row */
+  .add-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .add-input {
+    flex: 1;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    padding: 11px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    outline: none;
+    min-width: 0;
+  }
+  .add-input:focus { border-color: var(--plum); }
+  .add-btn {
+    width: 44px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    border: none;
+    background: var(--plum);
+    color: white;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.12s ease;
+  }
+  .add-btn:active { transform: scale(0.92); }
+
+  .url-input-row {
+    margin-bottom: 10px;
+  }
+
+  /* List */
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 2px;
+    border-bottom: 1px solid var(--line);
+    user-select: none;
+  }
+  .task-row:last-child { border-bottom: none; }
+
+  .task-label {
+    flex: 1;
+    font-size: 15px;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .task-label a {
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+    opacity: 0.85;
+  }
+  .task-label .no-link { cursor: default; }
+  .link-arrow {
+    display: inline-block;
+    margin-left: 4px;
+    opacity: 0.55;
+    vertical-align: -1px;
+  }
+
+  .item-main { flex: 1; min-width: 0; }
+
+  .added-by {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    opacity: 0.7;
+    margin-top: 4px;
+  }
+
+  .item-name-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .item-title-input {
+    flex: 1;
+    min-width: 0;
+    font-size: 15px;
+    line-height: 1.35;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    outline: none;
+    padding: 2px 0;
+  }
+
+  .item-tag-input {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--plum);
+    background: var(--plum-bg);
+    border: none;
+    padding: 3px 8px;
+    border-radius: 999px;
+    outline: none;
+    width: 100px;
+    min-width: 0;
+    flex-shrink: 0;
+  }
+  .item-tag-input::placeholder { color: var(--plum); opacity: 0.55; }
+
+  .item-link-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .item-link-input {
+    flex: 1;
+    font-size: 13px;
+    color: var(--muted);
+    border: none;
+    border-bottom: 1px dashed var(--line);
+    background: transparent;
+    outline: none;
+    padding: 3px 0;
+    min-width: 0;
+  }
+  .item-link-input:focus { border-bottom-color: var(--plum); }
+  .item-link-input::placeholder { color: var(--muted); opacity: 0.7; }
+
+  .item-notes-input {
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--ink);
+    border: none;
+    background: transparent;
+    outline: none;
+    padding: 5px 0 0 0;
+    margin-top: 3px;
+    border-top: 1px dashed var(--line);
+    resize: none;
+    overflow: hidden;
+    display: block;
+  }
+  .item-notes-input::placeholder { color: var(--muted); opacity: 0.7; }
+
+  .icon-btn {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--plum);
+    background: var(--plum-bg);
+    text-decoration: none;
+  }
+
+  .remove-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease;
+  }
+  .remove-btn:hover { opacity: 1; background: rgba(180,99,111,0.15); color: var(--rose); }
+
+  .empty-state {
+    padding: 22px 2px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    font-style: italic;
+  }
+
+  .count-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 8px;
+  }
+
+  .grace {
+    margin: 24px 20px 0;
+    padding: 16px 18px;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #1B1E1A;
+    --card: #242821;
+    --ink: #E9ECE4;
+    --muted: #93A18F;
+    --line: #33372E;
+    --rose: #E08A96;
+    --rose-bg: #3A2429;
+    --gold: #E0A94A;
+    --gold-bg: #3A2E17;
+    --sage: #9DBB92;
+    --sage-bg: #29332A;
+    --blue: #82A4C4;
+    --blue-bg: #223541;
+    --plum: #B79ACF;
+    --plum-bg: #332740;
+  }
+
+  .loading {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body style="margin:0;">
+<script src="theme.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="auth.js"></script>
+<script src="visits.js"></script>
+<div id="app"></div>
+
+<script>
+(function() {
+  const PEOPLE = [
+    { key: 'nat', label: "Nat's List", cls: 'nat', placeholder: 'e.g. cozy wool socks' },
+    { key: 'neal', label: "Neal's List", cls: 'neal', placeholder: 'e.g. new coffee grinder' }
+  ];
+
+  const now = new Date();
+
+  const defaultState = {
+    nat: [],
+    neal: []
+    // each item: { id, text, url }
+  };
+
+  let state = null;
+  const app = document.getElementById('app');
+  app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
+
+  // --- Firebase setup (same project as Tending Today, separate document) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyAzJ9EFIGW1l5-IgmrD2MyGTe8_WIcL3hs",
+    authDomain: "tendingtoday-f30e4.firebaseapp.com",
+    projectId: "tendingtoday-f30e4",
+    storageBucket: "tendingtoday-f30e4.firebasestorage.app",
+    messagingSenderId: "334824670755",
+    appId: "1:334824670755:web:c21c47bc292f8ed711d396",
+    measurementId: "G-LJ7XZP3FE1"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const docRef = db.collection('household').doc('wishlist-state');
+
+  function normalize(raw) {
+    let s = raw ? JSON.parse(JSON.stringify(raw)) : structuredClone(defaultState);
+    PEOPLE.forEach(p => {
+      if (!Array.isArray(s[p.key])) s[p.key] = [];
+      s[p.key].forEach(it => {
+        if (typeof it.addedBy !== 'string') it.addedBy = '';
+        if (typeof it.category !== 'string') it.category = '';
+        if (typeof it.notes !== 'string') it.notes = '';
+      });
+    });
+    return s;
+  }
+
+  function makeId() {
+    return 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  async function load() {
+    try {
+      const snap = await docRef.get();
+      state = normalize(snap.exists ? snap.data() : null);
+      if (!snap.exists) {
+        await save();
+      }
+      render();
+
+      docRef.onSnapshot((snapshot) => {
+        if (!snapshot.exists) return;
+        state = normalize(snapshot.data());
+        render();
+      });
+    } catch (e) {
+      console.error('Firestore load failed', e);
+      state = structuredClone(defaultState);
+      app.innerHTML = '<div class="loading">Couldn\u2019t connect \u2014 check your connection and reload.</div>';
+    }
+  }
+
+  async function save() {
+    try {
+      await docRef.set(state);
+      if (window.trackPageUpdate) window.trackPageUpdate('wishlist');
+    } catch (e) {
+      console.error('Firestore save failed', e);
+    }
+  }
+
+  function giftSVG(fraction) {
+    // A stack of gift boxes builds up as items pile onto both lists together.
+    const boxes = [
+      {
+        // bottom box: always at least partially there once anything's on the list
+        x: 9, y: 32, w: 38, h: 17, ribbonW: 6, fill: '#8B6FA8', ribbon: '#71578C',
+        op: Math.min(1, fraction / 0.1)
+      },
+      {
+        x: 14, y: 20, w: 28, h: 14, ribbonW: 5, fill: '#B4636F', ribbon: '#96525C',
+        op: Math.min(1, Math.max(0, (fraction - 0.35)) / 0.2)
+      },
+      {
+        x: 19, y: 9, w: 18, h: 12, ribbonW: 4, fill: '#5B7B9A', ribbon: '#496781',
+        op: Math.min(1, Math.max(0, (fraction - 0.7)) / 0.2)
+      }
+    ];
+    const boxShapes = boxes.map(b => {
+      const cx = b.x + b.w / 2;
+      return `<g style="opacity:${b.op}; transition: opacity 0.4s ease;">
+        <rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="2.5" fill="${b.fill}"/>
+        <rect x="${cx - b.ribbonW/2}" y="${b.y}" width="${b.ribbonW}" height="${b.h}" fill="${b.ribbon}"/>
+        <rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h * 0.28}" fill="${b.ribbon}" opacity="0.55"/>
+      </g>`;
+    }).join('');
+    return `<svg viewBox="0 0 56 56" width="56" height="56">
+      ${boxShapes}
+    </svg>`;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/"/g, '&quot;');
+  }
+
+  function normalizeUrl(u) {
+    u = u.trim();
+    if (!u) return '';
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    return u;
+  }
+
+  // A category's color is derived from its text (hashed to a fixed
+  // palette), so the same category name always lands on the same color
+  // wherever it appears — no color picker needed, and it's automatically
+  // consistent across every item that shares that category.
+  const CATEGORY_PALETTE = [
+    { bg: '#F6E8EA', color: '#B4636F' }, // rose
+    { bg: '#FBF1DE', color: '#C08A2E' }, // gold
+    { bg: '#E4EBDF', color: '#7C9075' }, // sage
+    { bg: '#DCE7EF', color: '#5B7B9A' }, // blue
+    { bg: '#E5DCEE', color: '#8B6FA8' }, // plum
+    { bg: '#CFE7E0', color: '#3F7F73' }, // teal
+    { bg: '#EEDCC8', color: '#A9633F' }, // clay
+    { bg: '#F4E4B4', color: '#8A6417' }  // amber
+  ];
+  function hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash * 31 + str.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash);
+  }
+  function categoryColors(category) {
+    const trimmed = (category || '').trim();
+    if (!trimmed) return { bg: 'var(--plum-bg)', color: 'var(--plum)' };
+    const idx = hashString(trimmed.toLowerCase()) % CATEGORY_PALETTE.length;
+    return CATEGORY_PALETTE[idx];
+  }
+
+  // Groups items by category, A-Z (case-insensitive); items with no category
+  // sort to the end. Stable within each category, keeping original add order.
+  function sortByCategory(arr) {
+    return arr
+      .map((it, idx) => ({ it, idx }))
+      .sort((a, b) => {
+        const ca = (a.it.category || '').trim();
+        const cb = (b.it.category || '').trim();
+        if (!ca && cb) return 1;
+        if (ca && !cb) return -1;
+        if (ca.toLowerCase() !== cb.toLowerCase()) return ca.toLowerCase().localeCompare(cb.toLowerCase());
+        return a.idx - b.idx;
+      })
+      .map(x => x.it);
+  }
+
+  function linkArrowIcon() {
+    return `<svg class="link-arrow" width="11" height="11" viewBox="0 0 13 13"><path d="M5 8L8 5M6 3.5L6.8 2.7C7.8 1.7 9.4 1.7 10.3 2.7C11.3 3.6 11.3 5.2 10.3 6.2L9.5 7M7 9.5L6.2 10.3C5.2 11.3 3.6 11.3 2.7 10.3C1.7 9.4 1.7 7.8 2.7 6.8L3.5 6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/></svg>`;
+  }
+
+  function homeIcon() {
+    return `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 7.5L8 2.5L14 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M4 6.5V13H12V6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function themeIcon() {
+    return window.currentTheme === 'dark'
+      ? `<svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.5V3.2"/><path d="M8 12.8V14.5"/><path d="M1.5 8H3.2"/><path d="M12.8 8H14.5"/><path d="M3.4 3.4L4.6 4.6"/><path d="M11.4 11.4L12.6 12.6"/><path d="M12.6 3.4L11.4 4.6"/><path d="M4.6 11.4L3.4 12.6"/></g></svg>`
+      : `<svg width="15" height="15" viewBox="0 0 16 16"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5A5 5 0 0 0 13.5 9.5Z" fill="currentColor"/></svg>`;
+  }
+
+  function render() {
+    const dateLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    const totalItems = PEOPLE.reduce((sum, p) => sum + state[p.key].length, 0);
+    const frac = Math.min(1, totalItems / 12);
+
+    let html = '';
+    html += `<div class="header">
+      <div class="header-icons">
+        <a class="home-btn" href="home.html" aria-label="Home">${homeIcon()}</a>
+      </div>
+      <div class="header-text">
+        <h1>Wishlist</h1>
+        <div class="date">${dateLabel}</div>
+      </div>
+      <div class="gift-wrap">${giftSVG(frac)}</div>
+    </div>`;
+
+    PEOPLE.forEach(p => {
+      const items = sortByCategory(state[p.key]);
+      html += `<div class="section ${p.cls}">
+        <div class="eyebrow">Wishlist</div>
+        <h2>${p.label}</h2>
+        <div class="add-row">
+          <input type="text" class="add-input" id="new-item-${p.key}" placeholder="${p.placeholder}" autocomplete="off">
+          <button class="add-btn" data-add="${p.key}" aria-label="Add item">+</button>
+        </div>
+        <div class="url-input-row">
+          <input type="text" class="add-input" id="new-url-${p.key}" placeholder="Link (optional)" autocomplete="off" style="width:100%;">
+        </div>`;
+
+      if (items.length === 0) {
+        html += `<div class="empty-state">Nothing on here yet \u2014 add something you'd love to get.</div>`;
+      } else {
+        items.forEach(it => {
+          const catColors = categoryColors(it.category);
+          html += `<div class="task-row" data-id="${it.id}">
+            <div class="item-main">
+              <div class="item-name-line">
+                <input type="text" class="item-title-input" value="${escapeAttr(it.text)}" placeholder="Item" data-edit="${p.key}|${it.id}|text">
+                <input type="text" class="item-tag-input" style="color:${catColors.color}; background:${catColors.bg};" value="${escapeAttr(it.category || '')}" placeholder="Category" data-edit="${p.key}|${it.id}|category">
+              </div>
+              <div class="item-link-row">
+                <input type="text" class="item-link-input" value="${escapeAttr(it.url || '')}" placeholder="Link (optional)" data-edit="${p.key}|${it.id}|url">
+                ${it.url ? `<a class="icon-btn" href="${it.url}" target="_blank" rel="noopener noreferrer" aria-label="Open link">${linkArrowIcon()}</a>` : ''}
+              </div>
+              <textarea class="item-notes-input" rows="1" placeholder="Add a note (optional)" data-note="${p.key}|${it.id}">${escapeHtml(it.notes || '')}</textarea>
+              ${it.addedBy ? `<div class="added-by">Added by ${escapeHtml(it.addedBy)}</div>` : ''}
+            </div>
+            <button class="remove-btn" data-remove="${it.id}" data-person="${p.key}" aria-label="Remove item">\u00d7</button>
+          </div>`;
+        });
+        html += `<div class="count-label">${items.length} item${items.length === 1 ? '' : 's'}</div>`;
+      }
+
+      html += `</div>`;
+    });
+
+    html += `<div class="grace">Add anything you're hoping for, with or without a link. Whoever's shopping can peek in any time.<br><br>Synced live across your household \u2014 anyone with this page open sees updates instantly.</div>`;
+
+    app.innerHTML = html;
+    bindEvents();
+  }
+
+  function bindEvents() {
+
+    PEOPLE.forEach(p => {
+      const textInput = app.querySelector(`#new-item-${p.key}`);
+      const urlInput = app.querySelector(`#new-url-${p.key}`);
+      const addBtn = app.querySelector(`[data-add="${p.key}"]`);
+
+      async function addItem() {
+        const text = textInput.value.trim();
+        if (!text) return;
+        const url = normalizeUrl(urlInput.value);
+        state[p.key].push({
+          id: makeId(),
+          text,
+          url,
+          category: '',
+          notes: '',
+          addedBy: (window.getHouseholdUserLabel && window.getHouseholdUserLabel()) || ''
+        });
+        textInput.value = '';
+        urlInput.value = '';
+        await save();
+        render();
+        const fresh = app.querySelector(`#new-item-${p.key}`);
+        if (fresh) fresh.focus();
+      }
+
+      if (addBtn) addBtn.addEventListener('click', addItem);
+      [textInput, urlInput].forEach(inp => {
+        if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') addItem(); });
+      });
+    });
+
+    app.querySelectorAll('[data-remove]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = el.getAttribute('data-remove');
+        const person = el.getAttribute('data-person');
+        state[person] = state[person].filter(i => i.id !== id);
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-edit]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const [person, id, field] = el.getAttribute('data-edit').split('|');
+        const it = state[person] && state[person].find(x => x.id === id);
+        if (!it) return;
+        if (field === 'text') {
+          const val = el.value.trim();
+          if (val) { it.text = val; await save(); }
+        } else if (field === 'url') {
+          it.url = normalizeUrl(el.value);
+          await save();
+        } else if (field === 'category') {
+          it.category = el.value.trim();
+          await save();
+        }
+        render();
+      });
+    });
+
+    // Live color preview for category pills as you type, ahead of the
+    // 'change' event (which only fires on blur) actually saving it.
+    app.querySelectorAll('.item-tag-input').forEach(el => {
+      el.addEventListener('input', () => {
+        const c = categoryColors(el.value);
+        el.style.color = c.color;
+        el.style.background = c.bg;
+      });
+    });
+
+    app.querySelectorAll('[data-note]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const [person, id] = el.getAttribute('data-note').split('|');
+        const it = state[person] && state[person].find(x => x.id === id);
+        if (it) {
+          it.notes = el.value.trim();
+          await save();
+        }
+        render();
+      });
+    });
+
+    app.querySelectorAll('textarea.item-notes-input').forEach(el => {
+      const autoGrow = () => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
+      autoGrow();
+      el.addEventListener('input', autoGrow);
+    });
+  }
+
+  requireHouseholdAuth(function() {
+    trackPageVisit('wishlist');
+    initTheme();
+    load();
+  });
+})();
+</script>
+
+</body>
+</html>

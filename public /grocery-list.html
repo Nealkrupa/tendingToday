@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grocery List</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --bg: #FBF1DE;
+    --card: #FFFFFF;
+    --ink: #263029;
+    --muted: #6B7568;
+    --line: #EBDCB8;
+    --rose: #B4636F;
+    --rose-bg: #F6E8EA;
+    --gold: #C08A2E;
+    --gold-bg: #F5E4BE;
+    --sage: #7C9075;
+    --sage-bg: #E4EBDF;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+  }
+
+  #app {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 0 48px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .header-icons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .home-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.1);
+    text-decoration: none;
+    color: var(--ink);
+    flex-shrink: 0;
+    transition: transform 0.12s ease;
+  }
+  .home-btn:active { transform: scale(0.92); }
+
+  .header {
+    padding: 28px 20px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .header-text h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 24px;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.01em;
+  }
+
+  .header-text .date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .plant-wrap {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+  }
+
+  .section {
+    margin: 0 16px 16px 16px;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 18px 18px 14px;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.06);
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 6px 0;
+  }
+
+  .section h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 18px;
+    margin: 0 0 12px 0;
+  }
+
+  /* Add-item row */
+  .add-row {
+    display: flex;
+    gap: 8px;
+  }
+  .add-input {
+    flex: 1;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    padding: 11px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+    min-width: 0;
+  }
+  .add-input:focus {
+    border-color: var(--sage);
+  }
+  .add-btn {
+    width: 44px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    border: none;
+    background: var(--sage);
+    color: white;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.12s ease;
+  }
+  .add-btn:active { transform: scale(0.92); }
+
+  /* List */
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 2px;
+    border-bottom: 1px solid var(--line);
+    user-select: none;
+  }
+  .task-row:last-child { border-bottom: none; }
+
+  .checkbox {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    border: 2px solid var(--muted);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.18s ease;
+    background: transparent;
+    cursor: pointer;
+  }
+  .checkbox svg { opacity: 0; transform: scale(0.5); transition: all 0.18s ease; }
+  .checkbox.checked { background: var(--sage); border-color: var(--sage); }
+  .checkbox.checked svg { opacity: 1; transform: scale(1); }
+
+  .task-label {
+    flex: 1;
+    font-size: 15px;
+    line-height: 1.35;
+    transition: color 0.18s ease, opacity 0.18s ease;
+    cursor: pointer;
+    word-break: break-word;
+  }
+  .task-row.done .task-label { color: var(--muted); opacity: 0.65; text-decoration: line-through; text-decoration-color: var(--muted); }
+
+  .added-by {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    opacity: 0.7;
+    margin-left: 6px;
+    white-space: nowrap;
+  }
+
+  .remove-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease;
+  }
+  .remove-btn:hover { opacity: 1; background: var(--rose-bg); color: var(--rose); }
+
+  .empty-state {
+    padding: 22px 2px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    font-style: italic;
+  }
+
+  .footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 4px 2px 0;
+    padding-top: 4px;
+  }
+  .count-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .clear-btn {
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--rose);
+    background: none;
+    border: none;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 4px 0;
+  }
+  .clear-btn:disabled {
+    color: var(--muted);
+    text-decoration: none;
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .grace {
+    margin: 24px 20px 0;
+    padding: 16px 18px;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #1B1E1A;
+    --card: #242821;
+    --ink: #E9ECE4;
+    --muted: #93A18F;
+    --line: #33372E;
+    --rose: #E08A96;
+    --rose-bg: #3A2429;
+    --gold: #E0A94A;
+    --gold-bg: #3A2E17;
+    --sage: #9DBB92;
+    --sage-bg: #29332A;
+  }
+
+  .loading {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body style="margin:0;">
+<script src="theme.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="auth.js"></script>
+<script src="visits.js"></script>
+<div id="app"></div>
+
+<script>
+(function() {
+  function todayStr(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  const now = new Date();
+  const today = todayStr(now);
+
+  const defaultState = {
+    items: []
+    // each item: { id, text, done }
+  };
+
+  let state = null;
+  const app = document.getElementById('app');
+  app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
+
+  // --- Firebase setup (same project as Tending Today, separate document) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyAzJ9EFIGW1l5-IgmrD2MyGTe8_WIcL3hs",
+    authDomain: "tendingtoday-f30e4.firebaseapp.com",
+    projectId: "tendingtoday-f30e4",
+    storageBucket: "tendingtoday-f30e4.firebasestorage.app",
+    messagingSenderId: "334824670755",
+    appId: "1:334824670755:web:c21c47bc292f8ed711d396",
+    measurementId: "G-LJ7XZP3FE1"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const docRef = db.collection('household').doc('grocery-list-state');
+
+  function normalize(raw) {
+    let s = raw ? JSON.parse(JSON.stringify(raw)) : structuredClone(defaultState);
+    if (!Array.isArray(s.items)) s.items = [];
+    s.items.forEach(it => { if (typeof it.addedBy !== 'string') it.addedBy = ''; });
+    return s;
+  }
+
+  function makeId() {
+    return 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  async function load() {
+    try {
+      const snap = await docRef.get();
+      state = normalize(snap.exists ? snap.data() : null);
+      if (!snap.exists) {
+        await save();
+      }
+      render();
+
+      // Live sync: reflect changes from other devices instantly
+      docRef.onSnapshot((snapshot) => {
+        if (!snapshot.exists) return;
+        state = normalize(snapshot.data());
+        render();
+      });
+    } catch (e) {
+      console.error('Firestore load failed', e);
+      state = structuredClone(defaultState);
+      app.innerHTML = '<div class="loading">Couldn\u2019t connect \u2014 check your connection and reload.</div>';
+    }
+  }
+
+  async function save() {
+    try {
+      await docRef.set(state);
+      if (window.trackPageUpdate) window.trackPageUpdate('grocery-list');
+    } catch (e) {
+      console.error('Firestore save failed', e);
+    }
+  }
+
+  function basketSVG(fraction) {
+    // "Goods" fill in as the basket has more unchecked items, from the bottom up,
+    // and fade back out as items are checked off / the list empties.
+    const goods = [
+      { cx: 20, cy: 40, r: 4.2, fill: '#B4636F', op: Math.min(1, fraction / 0.15) },
+      { cx: 36, cy: 40, r: 4.2, fill: '#7C9075', op: Math.min(1, Math.max(0,(fraction-0.12)) / 0.15) },
+      { cx: 28, cy: 39, r: 4.6, fill: '#C08A2E', op: Math.min(1, Math.max(0,(fraction-0.28)) / 0.15) },
+      { cx: 22, cy: 34, r: 4, fill: '#7C9075', op: Math.min(1, Math.max(0,(fraction-0.45)) / 0.15) },
+      { cx: 34, cy: 34, r: 4, fill: '#B4636F', op: Math.min(1, Math.max(0,(fraction-0.6)) / 0.15) },
+      { cx: 28, cy: 30, r: 4.4, fill: '#C08A2E', op: Math.min(1, Math.max(0,(fraction-0.78)) / 0.2) }
+    ];
+    const goodShapes = goods.map(g =>
+      `<circle cx="${g.cx}" cy="${g.cy}" r="${g.r}" fill="${g.fill}" style="opacity:${g.op}; transition: opacity 0.4s ease;"/>`
+    ).join('');
+    return `<svg viewBox="0 0 56 56" width="56" height="56">
+      <g clip-path="url(#basket-clip)">
+        ${goodShapes}
+      </g>
+      <defs>
+        <clipPath id="basket-clip">
+          <path d="M14 24 L42 24 L38 46 L18 46 Z"/>
+        </clipPath>
+      </defs>
+      <path d="M20 24 L24 12" stroke="#C08A2E" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+      <path d="M36 24 L32 12" stroke="#C08A2E" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+      <path d="M14 24 L42 24 L38 46 L18 46 Z" fill="none" stroke="#C08A2E" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M20 32 L22 40" stroke="#C08A2E" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.6"/>
+      <path d="M28 32 L28 40" stroke="#C08A2E" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.6"/>
+      <path d="M36 32 L34 40" stroke="#C08A2E" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.6"/>
+    </svg>`;
+  }
+
+  function checkIcon() {
+    return `<svg width="14" height="14" viewBox="0 0 14 14"><path d="M2 7L5.5 10.5L12 3" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function homeIcon() {
+    return `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 7.5L8 2.5L14 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M4 6.5V13H12V6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function themeIcon() {
+    return window.currentTheme === 'dark'
+      ? `<svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.5V3.2"/><path d="M8 12.8V14.5"/><path d="M1.5 8H3.2"/><path d="M12.8 8H14.5"/><path d="M3.4 3.4L4.6 4.6"/><path d="M11.4 11.4L12.6 12.6"/><path d="M12.6 3.4L11.4 4.6"/><path d="M4.6 11.4L3.4 12.6"/></g></svg>`
+      : `<svg width="15" height="15" viewBox="0 0 16 16"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5A5 5 0 0 0 13.5 9.5Z" fill="currentColor"/></svg>`;
+  }
+
+  function render() {
+    const items = state.items;
+    const doneCount = items.filter(i => i.done).length;
+    const uncheckedCount = items.length - doneCount;
+    // Basket fills up as items pile onto the list, empties as they're checked off. Caps out around 8 items.
+    const frac = Math.min(1, uncheckedCount / 8);
+    const dateLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+
+    // Unchecked first, checked pushed to the bottom; stable within each group
+    const ordered = items
+      .map((item, idx) => ({ item, idx }))
+      .sort((a, b) => {
+        if (a.item.done !== b.item.done) return a.item.done ? 1 : -1;
+        return a.idx - b.idx;
+      })
+      .map(x => x.item);
+
+    let html = '';
+    html += `<div class="header">
+      <div class="header-icons">
+        <a class="home-btn" href="home.html" aria-label="Home">${homeIcon()}</a>
+      </div>
+      <div class="header-text">
+        <h1>Grocery List</h1>
+        <div class="date">${dateLabel}</div>
+      </div>
+      <div class="plant-wrap">${basketSVG(frac)}</div>
+    </div>`;
+
+    // Add item
+    html += `<div class="section">
+      <div class="eyebrow">Add to the list</div>
+      <div class="add-row">
+        <input type="text" class="add-input" id="new-item-input" placeholder="e.g. oat milk" autocomplete="off">
+        <button class="add-btn" id="add-item-btn" aria-label="Add item">+</button>
+      </div>
+    </div>`;
+
+    // List
+    html += `<div class="section">
+      <div class="eyebrow">Running List</div>
+      <h2>Pick it up</h2>`;
+
+    if (ordered.length === 0) {
+      html += `<div class="empty-state">Nothing on the list yet \u2014 add the first thing you're out of.</div>`;
+    } else {
+      ordered.forEach(it => {
+        html += `<div class="task-row ${it.done ? 'done' : ''}" data-id="${it.id}">
+          <div class="checkbox ${it.done ? 'checked' : ''}" data-check="${it.id}">${checkIcon()}</div>
+          <div class="task-label" data-check="${it.id}">${escapeHtml(it.text)}${it.addedBy ? `<span class="added-by">\u2014 ${escapeHtml(it.addedBy)}</span>` : ''}</div>
+          <button class="remove-btn" data-remove="${it.id}" aria-label="Remove item">\u00d7</button>
+        </div>`;
+      });
+      html += `<div class="footer-row">
+        <div class="count-label">${items.length} item${items.length === 1 ? '' : 's'} \u00b7 ${doneCount} in cart</div>
+        <button class="clear-btn" id="clear-checked-btn" ${doneCount === 0 ? 'disabled' : ''}>Clear checked</button>
+      </div>`;
+    }
+
+    html += `</div>`;
+
+    html += `<div class="grace">Add things the moment you notice you're out. Checking an item off just marks it "in the cart" \u2014 clear it once you're home and unpacked.<br><br>Synced live across your household \u2014 anyone with this page open sees updates instantly.</div>`;
+
+    app.innerHTML = html;
+    bindEvents();
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function bindEvents() {
+
+    const input = app.querySelector('#new-item-input');
+    const addBtn = app.querySelector('#add-item-btn');
+
+    async function addItem() {
+      const text = input.value.trim();
+      if (!text) return;
+      state.items.push({ id: makeId(), text, done: false, addedBy: (window.getHouseholdUserLabel && window.getHouseholdUserLabel()) || '' });
+      input.value = '';
+      await save();
+      render();
+      // restore focus so quick multi-adds are easy
+      const freshInput = app.querySelector('#new-item-input');
+      if (freshInput) freshInput.focus();
+    }
+
+    if (addBtn) addBtn.addEventListener('click', addItem);
+    if (input) input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addItem();
+    });
+
+    app.querySelectorAll('[data-check]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = el.getAttribute('data-check');
+        const it = state.items.find(i => i.id === id);
+        if (it) it.done = !it.done;
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-remove]').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = el.getAttribute('data-remove');
+        state.items = state.items.filter(i => i.id !== id);
+        await save();
+        render();
+      });
+    });
+
+    const clearBtn = app.querySelector('#clear-checked-btn');
+    if (clearBtn) clearBtn.addEventListener('click', async () => {
+      state.items = state.items.filter(i => !i.done);
+      await save();
+      render();
+    });
+  }
+
+  requireHouseholdAuth(function() {
+    trackPageVisit('grocery-list');
+    initTheme();
+    load();
+  });
+})();
+</script>
+
+</body>
+</html>

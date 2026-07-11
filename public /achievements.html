@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Star Board</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --bg: #F6E9C8;
+    --card: #FFFFFF;
+    --ink: #263029;
+    --muted: #6B7568;
+    --line: #EAD9A8;
+    --rose: #B4636F;
+    --rose-bg: #F6E8EA;
+    --gold: #C08A2E;
+    --gold-bg: #FBF1DE;
+    --sage: #7C9075;
+    --sage-bg: #E4EBDF;
+    --star: #E8B33C;
+    --star-deep: #C08A2E;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #1B1E1A;
+    --card: #242821;
+    --ink: #E9ECE4;
+    --muted: #93A18F;
+    --line: #33372E;
+    --rose: #E08A96;
+    --rose-bg: #3A2429;
+    --gold: #E0A94A;
+    --gold-bg: #3A2E17;
+    --sage: #9DBB92;
+    --sage-bg: #29332A;
+    --star: #E8B33C;
+    --star-deep: #B8873A;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+  }
+
+  #app {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 0 48px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .header-icons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .home-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.1);
+    text-decoration: none;
+    color: var(--ink);
+    flex-shrink: 0;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.12s ease;
+    font-family: inherit;
+  }
+  .home-btn:active { transform: scale(0.92); }
+
+  .header {
+    padding: 28px 20px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .header-text h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 24px;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.01em;
+  }
+
+  .header-text .date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .star-wrap {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+  }
+
+  .section {
+    margin: 0 16px 16px 16px;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 18px 18px 16px;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.06);
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 6px 0;
+  }
+
+  .section h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 18px;
+    margin: 0 0 12px 0;
+  }
+
+  .total-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .total-number {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 42px;
+    color: var(--gold);
+    line-height: 1;
+  }
+  .total-caption {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .streak-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .streak-chip {
+    background: var(--gold-bg);
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .streak-chip .mono {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-right: 6px;
+    font-weight: 500;
+  }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+
+  .tier-legend {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px 8px;
+    margin-top: 4px;
+  }
+  .tier-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    text-align: center;
+  }
+  .tier-name {
+    font-size: 11px;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .tier-req {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  .ladder-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .ladder-toggle {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--muted);
+    font-family: 'Fraunces', serif;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .ladder-toggle:hover { border-color: var(--gold); color: var(--gold); }
+
+  .ladder-note {
+    margin-top: 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .board {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .sticker {
+    background: var(--gold-bg);
+    border-radius: 16px;
+    padding: 16px 12px 14px;
+    flex: 1 1 calc(50% - 6px);
+    min-width: calc(50% - 6px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+  }
+
+  .emblem-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 2px;
+    min-height: 64px;
+  }
+
+  .sticker-label {
+    font-size: 13px;
+    line-height: 1.3;
+    font-weight: 600;
+  }
+
+  .sticker-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .tier-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gold);
+    background: var(--card);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .tier-badge.prestige {
+    color: #FFFFFF;
+    background: linear-gradient(90deg, var(--gold), var(--rose));
+    font-weight: 600;
+  }
+  .sticker-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .milestone-badges {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    margin-top: 2px;
+  }
+  .milestone-badge {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    line-height: 1.3;
+    color: var(--ink);
+    background: var(--card);
+    border: 1px solid var(--line);
+    padding: 4px 8px;
+    border-radius: 999px;
+    text-align: left;
+  }
+  .milestone-badge-text {
+    overflow-wrap: anywhere;
+  }
+  .milestone-badge .num { font-weight: 700; color: var(--gold); }
+
+  #milestone-banner-stack {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: calc(100% - 32px);
+    max-width: 420px;
+    pointer-events: none;
+  }
+  .milestone-banner {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--card);
+    border-radius: 14px;
+    padding: 12px 14px;
+    box-shadow: 0 4px 18px rgba(38,48,41,0.22);
+    border: 1px solid var(--line);
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(-14px) scale(0.97);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+  .milestone-banner.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  .milestone-banner-icon { flex-shrink: 0; }
+  .milestone-banner-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .milestone-banner-sub {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 1px;
+  }
+
+  .empty-state {
+    padding: 22px 2px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    font-style: italic;
+  }
+
+  .grace {
+    margin: 24px 20px 0;
+    padding: 16px 18px;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* Prestige emblem shimmer: a soft highlight sweeps diagonally across the
+     star, clipped to its silhouette (see emblemSVG). Runs continuously with
+     a pause between sweeps so it reads as an occasional glint, not a strobe. */
+  @keyframes emblem-shimmer-sweep {
+    0%   { transform: translateX(-10px); opacity: 0; }
+    8%   { opacity: 0.65; }
+    28%  { transform: translateX(58px); opacity: 0.65; }
+    40%  { transform: translateX(70px); opacity: 0; }
+    100% { transform: translateX(70px); opacity: 0; }
+  }
+  .emblem-shimmer-bar {
+    animation: emblem-shimmer-sweep 3.2s ease-in-out infinite;
+  }
+
+  .loading {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body style="margin:0;">
+<script src="theme.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="auth.js"></script>
+<script src="visits.js"></script>
+<div id="app"></div>
+
+<script>
+(function() {
+  const now = new Date();
+
+  const DAILY_LABELS = {
+    bed: 'Made the bed',
+    countersAM: 'Morning counter swipe',
+    litter: 'Scooped litter boxes',
+    dishes: 'Dishes done',
+    countersPM: 'Wiped counters + stovetop',
+    tidy: 'Tidy sweep',
+    laundry: 'Laundry action'
+  };
+
+  function labelFor(key) {
+    if (key === 'day:perfect') return 'Perfect days \u2014 all 7 foundations';
+    if (key === 'pet:brush') return 'Pet brush passes';
+    if (key === 'note:resolved') return 'Notes resolved';
+    if (key === 'project:task') return 'Project tasks completed';
+    if (key === 'project:finished') return 'Projects finished';
+    if (key.indexOf('daily:') === 0) return DAILY_LABELS[key.slice(6)] || key.slice(6);
+    if (key.indexOf('zone:') === 0) return 'Zone day: ' + key.slice(5);
+    if (key.indexOf('deep:') === 0) return 'Deep clean: ' + key.slice(5);
+    return key;
+  }
+
+  let data = { counts: {}, streak: { current: 0, best: 0, lastPerfectDate: '' }, milestones: {} };
+  let ladderOpen = false;
+  const app = document.getElementById('app');
+  app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
+
+  // --- Firebase setup ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyAzJ9EFIGW1l5-IgmrD2MyGTe8_WIcL3hs",
+    authDomain: "tendingtoday-f30e4.firebaseapp.com",
+    projectId: "tendingtoday-f30e4",
+    storageBucket: "tendingtoday-f30e4.firebasestorage.app",
+    messagingSenderId: "334824670755",
+    appId: "1:334824670755:web:c21c47bc292f8ed711d396",
+    measurementId: "G-LJ7XZP3FE1"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const docRef = db.collection('household').doc('achievements-state');
+
+  function normalize(raw) {
+    const d = raw || {};
+    const counts = {};
+    Object.entries(d.counts || {}).forEach(([k, v]) => {
+      if (typeof v === 'number' && v > 0) counts[k] = v;
+    });
+    const streak = d.streak || {};
+    const milestones = {};
+    Object.entries(d.milestones || {}).forEach(([key, byThreshold]) => {
+      Object.entries(byThreshold || {}).forEach(([threshold, info]) => {
+        if (info && typeof info === 'object') {
+          if (!milestones[key]) milestones[key] = {};
+          milestones[key][threshold] = {
+            date: typeof info.date === 'string' ? info.date : '',
+            by: typeof info.by === 'string' ? info.by : ''
+          };
+        }
+      });
+    });
+    return {
+      counts,
+      streak: {
+        current: typeof streak.current === 'number' ? streak.current : 0,
+        best: typeof streak.best === 'number' ? streak.best : 0,
+        lastPerfectDate: typeof streak.lastPerfectDate === 'string' ? streak.lastPerfectDate : ''
+      },
+      milestones
+    };
+  }
+
+  // Returns a flat list of { key, threshold, date, by } entries present in
+  // `newM` but not in `oldM` — i.e. milestones that were just crossed.
+  function diffNewMilestones(oldM, newM) {
+    const found = [];
+    Object.entries(newM).forEach(([key, byThreshold]) => {
+      Object.entries(byThreshold).forEach(([threshold, info]) => {
+        const already = oldM[key] && oldM[key][threshold];
+        if (!already) found.push({ key, threshold: Number(threshold), date: info.date, by: info.by });
+      });
+    });
+    return found;
+  }
+
+  // Testing only: fully wipes the test achievement's count AND its
+  // milestone stamps, unlike recordAchievement (which never un-stamps a
+  // milestone by design). This lets you re-trigger the same crossing —
+  // One-time silent cleanup: if a leftover "test:demo" entry exists from
+  // earlier testing, remove it so it doesn't linger as a phantom sticker
+  // on the real board. No UI for this — it just quietly tidies up.
+  async function cleanupTestData(raw) {
+    if (!raw) return;
+    const inCounts = raw.counts && ('test:demo' in raw.counts);
+    const inMilestones = raw.milestones && ('test:demo' in raw.milestones);
+    if (!inCounts && !inMilestones) return; // nothing to clean up
+    try {
+      await docRef.update({
+        ['counts.test:demo']: firebase.firestore.FieldValue.delete(),
+        ['milestones.test:demo']: firebase.firestore.FieldValue.delete()
+      });
+    } catch (e) {
+      console.error('Could not clean up leftover test data', e);
+    }
+  }
+
+  async function load() {
+    try {
+      const snap = await docRef.get();
+      const raw = snap.exists ? snap.data() : null;
+      data = normalize(raw);
+      render();
+      cleanupTestData(raw);
+
+      docRef.onSnapshot((snapshot) => {
+        const incoming = normalize(snapshot.exists ? snapshot.data() : null);
+        const newMilestones = diffNewMilestones(data.milestones, incoming.milestones);
+        data = incoming;
+        render();
+        newMilestones.forEach(showMilestoneBanner);
+      });
+    } catch (e) {
+      console.error('Firestore load failed', e);
+      app.innerHTML = '<div class="loading">Couldn\u2019t connect \u2014 check your connection and reload.</div>';
+    }
+  }
+
+  // --- Emblem rendering ---
+  // Tier thresholds compressed into a single 0–499 band. The emblem climbs
+  // this whole named ladder once per "prestige lap" (every 500 counts).
+  // Colors move cool→warm→jewel as ranks rise.
+  const TIERS = [
+    { min: 0,    name: 'Bronze',    points: 5, body: '#C58A54', edge: '#9A6636', ring: null,       rays: 0 },  // 0-4     (5)
+    { min: 5,    name: 'Iron',      points: 5, body: '#9BA6A0', edge: '#6E7873', ring: null,       rays: 0 },  // 5-14    (10)
+    { min: 15,   name: 'Silver',    points: 5, body: '#C9D2D6', edge: '#8E9BA1', ring: '#8E9BA1',  rays: 0 },  // 15-29   (15)
+    { min: 30,   name: 'Gold',      points: 5, body: '#E8B33C', edge: '#B8863A', ring: '#B8863A',  rays: 0 },  // 30-54   (25)
+    { min: 55,   name: 'Amber',     points: 6, body: '#E8A13C', edge: '#B06E1E', ring: '#B06E1E',  rays: 6 },  // 55-94   (40)
+    { min: 95,   name: 'Rose Gold', points: 6, body: '#E39AA0', edge: '#B4636F', ring: '#B4636F',  rays: 6 },  // 95-154  (60)
+    { min: 155,  name: 'Verdant',   points: 7, body: '#9DBB92', edge: '#5E7756', ring: '#5E7756',  rays: 8 },  // 155-239 (85)
+    { min: 240,  name: 'Amethyst',  points: 7, body: '#B79ACF', edge: '#7C5EA0', ring: '#7C5EA0',  rays: 8 },  // 240-359 (120)
+    { min: 360,  name: 'Radiant',   points: 8, body: '#F0C25A', edge: '#C0862E', ring: '#C0862E',  rays: 12 } // 360-499 (140) — longest band, the capstone
+  ];
+
+  // --- Prestige laps ---
+  // Every 500 counts is one full climb of the ladder above. The count's
+  // position *within* its 500-band picks the named tier; the band number is
+  // the prestige level. Prestige 0 (0–499) is the plain base ladder with no
+  // numeral; Prestige I begins at 500, II at 1000, and so on.
+  const PRESTIGE_BAND = 500;
+
+  // Which named tier a count maps to, based on its position within its band.
+  function tierFor(count) {
+    const local = count % PRESTIGE_BAND;
+    let t = TIERS[0], idx = 0;
+    for (let i = 0; i < TIERS.length; i++) {
+      if (local >= TIERS[i].min) { t = TIERS[i]; idx = i; }
+    }
+    return { tier: t, index: idx, next: TIERS[idx + 1] || null };
+  }
+
+  // Palette cycle for prestige levels. Index 0 = Prestige I, wrapping around.
+  const PRESTIGE_PALETTES = [
+    { name: 'Radiant',   body: '#F0C25A', edge: '#C0862E', ring: '#C0862E', shimmer: '#FFF6D6' }, // I  — gold
+    { name: 'Crimson',   body: '#E68A8F', edge: '#B4636F', ring: '#B4636F', shimmer: '#FFE1E3' }, // II — rose/red
+    { name: 'Verdant',   body: '#A6C79A', edge: '#5E7756', ring: '#5E7756', shimmer: '#E9F7E0' }, // III— green
+    { name: 'Azure',     body: '#8FB4D6', edge: '#4E6E8E', ring: '#4E6E8E', shimmer: '#E3F2FC' }, // IV — blue
+    { name: 'Amethyst',  body: '#BF9FD6', edge: '#7C5EA0', ring: '#7C5EA0', shimmer: '#F4E9FC' }, // V  — purple
+    { name: 'Obsidian',  body: '#8A93A0', edge: '#3E4650', ring: '#C0862E', shimmer: '#E8D9A8' }  // VI — dark w/ gold ring, warm shimmer
+  ];
+
+  function romanNumeral(n) {
+    const map = [[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+    let out = '';
+    for (const [v, s] of map) { while (n >= v) { out += s; n -= v; } }
+    return out;
+  }
+
+  // Returns null in the base lap (0–499); otherwise { level, palette }.
+  function prestigeFor(count) {
+    const level = Math.floor(count / PRESTIGE_BAND);
+    if (level < 1) return null;
+    const palette = PRESTIGE_PALETTES[(level - 1) % PRESTIGE_PALETTES.length];
+    return { level, palette };
+  }
+
+  // How many stars to show for a given count: within a tier's band, the
+  // number of stars grows from 1 up to MAX_STARS_PER_TIER as the count
+  // climbs toward the next tier, then resets to a single star of the next
+  // (higher) rank on promotion. The top tier keeps growing past its max
+  // band cap so a huge count still reads as "many big stars".
+  const MAX_STARS_PER_TIER = 4;
+
+  function starsWithinTier(count) {
+    const { tier, next } = tierFor(count);
+    const local = count % PRESTIGE_BAND;
+    // The end of the current tier's span: either the next tier's min, or the
+    // end of the 500-band (where the ladder wraps to the next prestige lap).
+    const tierEnd = next ? next.min : PRESTIGE_BAND;
+    const span = Math.max(1, tierEnd - tier.min);
+    const into = local - tier.min;
+    const n = 1 + Math.floor((into / span) * MAX_STARS_PER_TIER);
+    return Math.min(MAX_STARS_PER_TIER, Math.max(1, n));
+  }
+
+  // Build an N-pointed star path centered at (cx,cy).
+  function starPath(cx, cy, points, outer, inner, rotationDeg) {
+    const rot = (rotationDeg || -90) * Math.PI / 180;
+    const step = Math.PI / points;
+    let d = '';
+    for (let i = 0; i < points * 2; i++) {
+      const r = i % 2 === 0 ? outer : inner;
+      const a = rot + i * step;
+      const x = cx + r * Math.cos(a);
+      const y = cy + r * Math.sin(a);
+      d += (i === 0 ? 'M' : 'L') + x.toFixed(2) + ' ' + y.toFixed(2) + ' ';
+    }
+    return d + 'Z';
+  }
+
+  // The core emblem for a given tier. `size` in px, `count` picks the tier.
+  function emblemSVG(size, count, opts) {
+    opts = opts || {};
+    const { tier } = tierFor(count);
+    const prestige = prestigeFor(count);
+    // The tier decides the *shape* (points, rays, whether there's a ring).
+    // Prestige, if any, recolors the emblem via its palette; otherwise the
+    // tier's own colors are used.
+    const body = prestige ? prestige.palette.body : tier.body;
+    const edge = prestige ? prestige.palette.edge : tier.edge;
+    // A ring only appears if this tier has one; its color follows prestige.
+    const ringColor = tier.ring ? (prestige ? prestige.palette.ring : tier.ring) : null;
+    const cx = 32, cy = 32;
+    const innerRatio = 0.44;
+    const uid = 'g' + Math.random().toString(36).slice(2, 8);
+
+    let rays = '';
+    if (tier.rays > 0) {
+      const rayItems = [];
+      for (let i = 0; i < tier.rays; i++) {
+        const a = (-90 + (360 / tier.rays) * i) * Math.PI / 180;
+        const x1 = cx + 22 * Math.cos(a);
+        const y1 = cy + 22 * Math.sin(a);
+        const x2 = cx + 29 * Math.cos(a);
+        const y2 = cy + 29 * Math.sin(a);
+        rayItems.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${edge}" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/>`);
+      }
+      rays = rayItems.join('');
+    }
+
+    let ring = '';
+    if (ringColor) {
+      ring = `<circle cx="${cx}" cy="${cy}" r="19.5" fill="none" stroke="${ringColor}" stroke-width="1.6" opacity="0.6"/>`;
+    }
+
+    const outer = 17, inner = outer * innerRatio;
+    const bodyPath = starPath(cx, cy, tier.points, outer, inner, -90);
+    // Inner highlight star, slightly smaller, for a faceted look.
+    const innerPath = starPath(cx, cy, tier.points, outer * 0.62, inner * 0.62, -90);
+
+    // Prestige numeral badge — a small roman numeral centered on the star.
+    let badge = '';
+    if (prestige && !opts.noBadge) {
+      const numeral = romanNumeral(prestige.level);
+      const fontSize = numeral.length >= 4 ? 8 : numeral.length === 3 ? 9.5 : 11;
+      badge = `<text x="${cx}" y="${cy + 0.5}" text-anchor="middle" dominant-baseline="central"
+        font-family="'Fraunces', serif" font-weight="600" font-size="${fontSize}"
+        fill="#FFFFFF" stroke="${edge}" stroke-width="0.4" paint-order="stroke"
+        style="letter-spacing:0.3px;">${numeral}</text>`;
+    }
+
+    // Prestige-only shimmer: a soft diagonal highlight sweeps across the
+    // star, clipped to its exact silhouette so it never spills outside the
+    // points. Color matches this prestige level's palette. Each instance
+    // gets a random animation delay so a row of stars doesn't shimmer in
+    // lockstep.
+    let shimmerClipDef = '';
+    let shimmerGroup = '';
+    if (prestige && !opts.noShimmer) {
+      const clipId = uid + '-clip';
+      const delay = (Math.random() * 1.6).toFixed(2);
+      shimmerClipDef = `<clipPath id="${clipId}"><path d="${bodyPath}"/></clipPath>`;
+      shimmerGroup = `<g clip-path="url(#${clipId})">
+          <g transform="rotate(24 ${cx} ${cy})">
+            <rect x="-26" y="-14" width="14" height="92" fill="${prestige.palette.shimmer}"
+              opacity="0" class="emblem-shimmer-bar" style="animation-delay:${delay}s;"/>
+          </g>
+        </g>`;
+    }
+
+    return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" style="flex-shrink:0;">
+      <defs>
+        <radialGradient id="${uid}" cx="42%" cy="34%" r="72%">
+          <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9"/>
+          <stop offset="34%" stop-color="${body}"/>
+          <stop offset="100%" stop-color="${edge}"/>
+        </radialGradient>
+        ${shimmerClipDef}
+      </defs>
+      ${rays}
+      ${ring}
+      <path d="${bodyPath}" fill="url(#${uid})" stroke="${edge}" stroke-width="1.6" stroke-linejoin="round"/>
+      ${shimmerGroup}
+      <path d="${innerPath}" fill="#FFFFFF" opacity="0.28"/>
+      ${badge ? badge : `<circle cx="26.5" cy="25" r="2" fill="#FFFFFF" opacity="0.85"/>`}
+    </svg>`;
+  }
+
+  // A cluster of 1..N identical tier emblems, growing as the count climbs
+  // within its tier band. Star size shrinks slightly as the count of stars
+  // rises so the group stays visually balanced in the sticker.
+  function emblemCluster(count, baseSize) {
+    const n = starsWithinTier(count);
+    const size = n >= 4 ? baseSize * 0.68 : n === 3 ? baseSize * 0.76 : n === 2 ? baseSize * 0.86 : baseSize;
+    let html = '';
+    for (let i = 0; i < n; i++) html += emblemSVG(size, count);
+    return html;
+  }
+
+  function headerEmblemSVG(total) {
+    return emblemSVG(56, total);
+  }
+
+  function homeIcon() {
+    return `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 7.5L8 2.5L14 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M4 6.5V13H12V6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function themeIcon() {
+    return window.currentTheme === 'dark'
+      ? `<svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.5V3.2"/><path d="M8 12.8V14.5"/><path d="M1.5 8H3.2"/><path d="M12.8 8H14.5"/><path d="M3.4 3.4L4.6 4.6"/><path d="M11.4 11.4L12.6 12.6"/><path d="M12.6 3.4L11.4 4.6"/><path d="M4.6 11.4L3.4 12.6"/></g></svg>`
+      : `<svg width="15" height="15" viewBox="0 0 16 16"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5A5 5 0 0 0 13.5 9.5Z" fill="currentColor"/></svg>`;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function formatMilestoneDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr + 'T12:00:00');
+    const opts = { month: 'short', day: 'numeric' };
+    if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
+    return d.toLocaleDateString(undefined, opts);
+  }
+
+  function trophyIcon(size) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 16 16" style="flex-shrink:0;">
+      <path d="M4 2.5H12V6C12 8.2 10.2 10 8 10C5.8 10 4 8.2 4 6V2.5Z" fill="var(--gold)" stroke="var(--star-deep)" stroke-width="0.7"/>
+      <path d="M4 3.3H2.3C2.3 5 3.2 6.1 4.4 6.3" fill="none" stroke="var(--star-deep)" stroke-width="0.8" stroke-linecap="round"/>
+      <path d="M12 3.3H13.7C13.7 5 12.8 6.1 11.6 6.3" fill="none" stroke="var(--star-deep)" stroke-width="0.8" stroke-linecap="round"/>
+      <rect x="7" y="10" width="2" height="2.2" fill="var(--gold)"/>
+      <path d="M5.3 13.8C5.3 12.6 6.5 12.2 8 12.2C9.5 12.2 10.7 12.6 10.7 13.8Z" fill="var(--gold)" stroke="var(--star-deep)" stroke-width="0.6"/>
+    </svg>`;
+  }
+
+  // One-time celebration banner, shown to whoever has the page open when a
+  // milestone is freshly crossed (by anyone in the household). Stacks if
+  // more than one fires close together, and auto-dismisses after a few
+  // seconds — tapping it dismisses immediately too.
+  function showMilestoneBanner(m) {
+    let stack = document.getElementById('milestone-banner-stack');
+    if (!stack) {
+      stack = document.createElement('div');
+      stack.id = 'milestone-banner-stack';
+      document.body.appendChild(stack);
+    }
+    const el = document.createElement('div');
+    el.className = 'milestone-banner';
+    el.innerHTML = `
+      <div class="milestone-banner-icon">${trophyIcon(22)}</div>
+      <div class="milestone-banner-text">
+        <div class="milestone-banner-title">First to ${m.threshold.toLocaleString()}!</div>
+        <div class="milestone-banner-sub">${escapeHtml(labelFor(m.key))}${m.by ? ' \u2014 ' + escapeHtml(m.by) : ''}${m.date ? ', ' + formatMilestoneDate(m.date) : ''}</div>
+      </div>`;
+    el.addEventListener('click', () => dismissBanner(el));
+    stack.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => dismissBanner(el), 6000);
+  }
+
+  function dismissBanner(el) {
+    if (!el || el.dataset.dismissing) return;
+    el.dataset.dismissing = '1';
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 300);
+  }
+
+  function render() {
+    const dateLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    const entries = Object.entries(data.counts).sort((a, b) => b[1] - a[1]);
+    const total = entries.reduce((sum, [, v]) => sum + v, 0);
+
+    let html = '';
+    html += `<div class="header">
+      <div class="header-icons">
+        <a class="home-btn" href="home.html" aria-label="Home">${homeIcon()}</a>
+      </div>
+      <div class="header-text">
+        <h1>Star Board</h1>
+        <div class="date">${dateLabel}</div>
+      </div>
+      <div class="star-wrap">${headerEmblemSVG(total)}</div>
+    </div>`;
+
+    // Totals + streak
+    html += `<div class="section">
+      <div class="eyebrow">All-Time</div>
+      <div class="total-row">
+        <div class="total-number">${total.toLocaleString()}</div>
+        <div class="total-caption">things completed, and counting</div>
+      </div>
+      <div class="streak-row">
+        <div class="streak-chip"><span class="mono">Current streak</span>${data.streak.current} perfect day${data.streak.current === 1 ? '' : 's'}</div>
+        <div class="streak-chip"><span class="mono">Best</span>${data.streak.best} day${data.streak.best === 1 ? '' : 's'}</div>
+      </div>
+    </div>`;
+
+    // Sticker board
+    html += `<div class="section">
+      <div class="eyebrow">The Board</div>
+      <h2>Everything you've earned</h2>`;
+
+    if (entries.length === 0) {
+      html += `<div class="empty-state">No emblems yet \u2014 go check something off and watch your first rank appear.</div>`;
+    } else {
+      html += `<div class="board">`;
+      entries.forEach(([key, count]) => {
+        const { tier } = tierFor(count);
+        const prestige = prestigeFor(count);
+        const badgeText = prestige
+          ? `${tier.name} \u00b7 ${romanNumeral(prestige.level)}`
+          : tier.name;
+        const milestonesForKey = data.milestones[key] || {};
+        const thresholds = Object.keys(milestonesForKey).map(Number).sort((a, b) => a - b);
+        let trophyRow = '';
+        if (thresholds.length > 0) {
+          trophyRow = `<div class="milestone-badges">` + thresholds.map(t => {
+            const info = milestonesForKey[t];
+            const detail = [info.by, info.date ? formatMilestoneDate(info.date) : ''].filter(Boolean).join(', ');
+            return `<span class="milestone-badge">
+              ${trophyIcon(12)}
+              <span class="milestone-badge-text"><span class="num">First to ${t.toLocaleString()}</span>${detail ? ' \u2014 ' + escapeHtml(detail) : ''}</span>
+            </span>`;
+          }).join('') + `</div>`;
+        }
+        html += `<div class="sticker">
+          <div class="emblem-wrap">${emblemCluster(count, 60)}</div>
+          <div class="sticker-label">${escapeHtml(labelFor(key))}</div>
+          <div class="sticker-meta">
+            <span class="tier-badge${prestige ? ' prestige' : ''}">${badgeText}</span>
+            <span class="sticker-count">\u00d7${count.toLocaleString()}</span>
+          </div>
+          ${trophyRow}
+        </div>`;
+      });
+      html += `</div>`;
+    }
+    html += `</div>`;
+
+    // Rank ladder — collapsed behind a small "?" toggle to save space. Sits
+    // at the bottom, below the board, as reference material.
+    html += `<div class="section">
+      <div class="ladder-head">
+        <div class="eyebrow" style="margin:0;">Rank Ladder</div>
+        <button class="ladder-toggle" type="button" id="ladder-toggle" aria-label="Show rank ladder">${ladderOpen ? '\u00d7' : '?'}</button>
+      </div>`;
+    if (ladderOpen) {
+      html += `<div class="tier-legend">`;
+      TIERS.forEach(t => {
+        html += `<div class="tier-item">
+          ${emblemSVG(38, t.min === 0 ? 1 : t.min)}
+          <div class="tier-name">${t.name}</div>
+          <div class="tier-req">${t.min === 0 ? '1+' : t.min + '+'}</div>
+        </div>`;
+      });
+      // Show a prestige emblem (level II shown for a clear color shift).
+      html += `<div class="tier-item">
+        ${emblemSVG(38, 1000)}
+        <div class="tier-name">Prestige</div>
+        <div class="tier-req">every 500</div>
+      </div>`;
+      html += `</div>
+        <div class="ladder-note">Within a rank, stars multiply (1 \u2192 2 \u2192 3 \u2192 4) as you climb, then reset to a single star of the next rank up. Reaching <strong>Radiant</strong> caps the named ladder. Every 500 total then earns a <strong>Prestige</strong> \u2014 the emblem shifts color, gains a roman-numeral badge (I, II, III\u2026), and climbs the whole ladder again, so your most-used tasks keep leveling up forever.</div>`;
+    }
+    html += `</div>`;
+
+    html += `<div class="grace">Every task checked off anywhere on the site earns progress here, forever \u2014 nothing on this board ever resets. Each emblem levels up through ranks as its count climbs, from Bronze all the way to Radiant.<br><br>Synced live across your household \u2014 anyone with this page open sees updates instantly.</div>`;
+
+    app.innerHTML = html;
+
+    const ladderBtn = app.querySelector('#ladder-toggle');
+    if (ladderBtn) ladderBtn.addEventListener('click', () => { ladderOpen = !ladderOpen; render(); });
+  }
+
+  requireHouseholdAuth(function() {
+    trackPageVisit('achievements');
+    initTheme();
+    load();
+  });
+})();
+</script>
+
+</body>
+</html>

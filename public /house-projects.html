@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>House Projects</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --bg: #F3E1D3;
+    --card: #FFFFFF;
+    --ink: #263029;
+    --muted: #6B7568;
+    --line: #E6CCB4;
+    --rose: #B4636F;
+    --rose-bg: #F6E8EA;
+    --gold: #C08A2E;
+    --gold-bg: #FBF1DE;
+    --sage: #7C9075;
+    --sage-bg: #E4EBDF;
+    --clay: #A9633F;
+    --clay-bg: #EEDCC8;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+  }
+
+  #app {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 0 48px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .header-icons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .home-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.1);
+    text-decoration: none;
+    color: var(--ink);
+    flex-shrink: 0;
+    transition: transform 0.12s ease;
+  }
+  .home-btn:active { transform: scale(0.92); }
+
+  .header {
+    padding: 28px 20px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .header-text h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 24px;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.01em;
+  }
+
+  .header-text .date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .tool-wrap {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+  }
+
+  .section {
+    margin: 0 16px 16px 16px;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 18px 18px 14px;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.06);
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 6px 0;
+  }
+
+  .section h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 18px;
+    margin: 0 0 12px 0;
+  }
+
+  /* Add-project row */
+  .add-row {
+    display: flex;
+    gap: 8px;
+  }
+  .add-input {
+    flex: 1;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    padding: 11px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+    min-width: 0;
+  }
+  .add-input:focus { border-color: var(--clay); }
+  .add-btn {
+    width: 44px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    border: none;
+    background: var(--clay);
+    color: white;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.12s ease;
+  }
+  .add-btn:active { transform: scale(0.92); }
+
+  .empty-state {
+    padding: 22px 2px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    font-style: italic;
+  }
+
+  /* Project card */
+  .project-card {
+    margin: 0 16px 16px 16px;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 16px 18px 16px;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.06);
+  }
+
+  .project-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .project-title-input {
+    flex: 1;
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 19px;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    outline: none;
+    padding: 2px 0;
+    min-width: 0;
+  }
+
+  .collapse-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.18s ease;
+  }
+  .collapse-btn.open { transform: rotate(90deg); }
+
+  .project-delete {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease;
+  }
+  .project-delete:hover { opacity: 1; background: var(--rose-bg); color: var(--rose); }
+
+  .priority-pill {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: none;
+    border-radius: 999px;
+    padding: 4px 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+    transition: transform 0.1s ease;
+  }
+  .priority-pill:active { transform: scale(0.94); }
+
+  .added-by {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    opacity: 0.7;
+    white-space: nowrap;
+  }
+
+  .progress-track {
+    height: 6px;
+    background: var(--line);
+    border-radius: 3px;
+    margin: 10px 0 4px 0;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--sage);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+  .progress-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+
+  .budget-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 12px 0 4px 0;
+    font-size: 13px;
+    color: var(--muted);
+    flex-wrap: wrap;
+  }
+  .budget-field {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .budget-field label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .budget-input {
+    width: 74px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    padding: 5px 8px;
+    border-radius: 8px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+  }
+  .budget-input:focus { border-color: var(--clay); }
+  .spent-readout {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .spent-readout.over { color: var(--rose); }
+  .spent-readout.under { color: var(--sage); }
+
+  .project-body {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+
+  .subhead {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 14px 0 8px 0;
+  }
+  .subhead:first-child { margin-top: 0; }
+
+  .mini-add-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .mini-input {
+    flex: 1;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+    min-width: 0;
+  }
+  .mini-input:focus { border-color: var(--clay); }
+  .mini-input.cost-input {
+    flex: 0 0 76px;
+  }
+  .mini-add-btn {
+    width: 36px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    border: none;
+    background: var(--clay);
+    color: white;
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mini-add-btn:active { transform: scale(0.92); }
+
+  .task-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 2px;
+    border-bottom: 1px solid var(--line);
+    user-select: none;
+  }
+  .task-row:last-child { border-bottom: none; }
+
+  .checkbox {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 2px solid var(--muted);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.18s ease;
+    background: transparent;
+    cursor: pointer;
+  }
+  .checkbox svg { opacity: 0; transform: scale(0.5); transition: all 0.18s ease; }
+  .checkbox.checked { background: var(--sage); border-color: var(--sage); }
+  .checkbox.checked svg { opacity: 1; transform: scale(1); }
+
+  .task-label-input {
+    flex: 1;
+    font-family: 'Inter', sans-serif;
+    font-size: 14.5px;
+    line-height: 1.35;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    outline: none;
+    padding: 2px 0;
+    min-width: 0;
+  }
+  .task-row.done .task-label-input { color: var(--muted); opacity: 0.65; text-decoration: line-through; text-decoration-color: var(--muted); }
+
+  .material-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 2px;
+    border-bottom: 1px solid var(--line);
+  }
+  .material-row:last-child { border-bottom: none; }
+  .material-name-input {
+    flex: 1;
+    font-family: 'Inter', sans-serif;
+    font-size: 14.5px;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    outline: none;
+    padding: 2px 0;
+    min-width: 0;
+  }
+  .material-cost-input {
+    width: 76px;
+    flex-shrink: 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+    text-align: right;
+  }
+  .material-cost-input:focus { border-color: var(--clay); }
+  .material-cost-input::placeholder { color: var(--muted); opacity: 0.7; }
+
+  .remove-btn {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    transition: opacity 0.15s ease, background 0.15s ease;
+  }
+  .remove-btn:hover { opacity: 1; background: var(--rose-bg); color: var(--rose); }
+
+  .no-items {
+    padding: 10px 2px;
+    font-size: 13px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .grace {
+    margin: 24px 20px 0;
+    padding: 16px 18px;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #1B1E1A;
+    --card: #242821;
+    --ink: #E9ECE4;
+    --muted: #93A18F;
+    --line: #33372E;
+    --rose: #E08A96;
+    --rose-bg: #3A2429;
+    --gold: #E0A94A;
+    --gold-bg: #3A2E17;
+    --sage: #9DBB92;
+    --sage-bg: #29332A;
+    --clay: #D08659;
+    --clay-bg: #3A2C1E;
+  }
+
+  .loading {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body style="margin:0;">
+<script src="theme.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="auth.js"></script>
+<script src="visits.js"></script>
+<script src="achievements.js"></script>
+<div id="app"></div>
+
+<script>
+(function() {
+  const now = new Date();
+
+  const defaultState = {
+    projects: []
+    // { id, title, budget, collapsed, tasks: [{id,text,done}], materials: [{id,name,cost}] }
+  };
+
+  // In-memory only (not saved) — the priority that will be assigned to the
+  // *next* new project/task, set via the pill next to each add form. Not
+  // reset after adding, so batch-adding several same-priority items in a
+  // row doesn't require reselecting each time.
+  let pendingProjectPriority = 'medium';
+  let pendingTaskPriority = {}; // keyed by project id
+
+  let state = null;
+  const app = document.getElementById('app');
+  app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
+
+  // --- Firebase setup (same project as Tending Today, separate document) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyAzJ9EFIGW1l5-IgmrD2MyGTe8_WIcL3hs",
+    authDomain: "tendingtoday-f30e4.firebaseapp.com",
+    projectId: "tendingtoday-f30e4",
+    storageBucket: "tendingtoday-f30e4.firebasestorage.app",
+    messagingSenderId: "334824670755",
+    appId: "1:334824670755:web:c21c47bc292f8ed711d396",
+    measurementId: "G-LJ7XZP3FE1"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const docRef = db.collection('household').doc('house-projects-state');
+
+  // Priority tags — cycles Critical -> High -> Medium -> Low on tap, and
+  // drives auto-sort everywhere (lower index = higher priority = sorts first).
+  const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
+  const PRIORITY_META = {
+    critical: { label: 'Critical', color: 'var(--rose)', bg: 'var(--rose-bg)' },
+    high:     { label: 'High',     color: 'var(--gold)', bg: 'var(--gold-bg)' },
+    medium:   { label: 'Medium',   color: 'var(--sage)', bg: 'var(--sage-bg)' },
+    low:      { label: 'Low',      color: 'var(--muted)', bg: 'var(--line)' }
+  };
+  function priorityIndex(p) {
+    const idx = PRIORITY_ORDER.indexOf(p);
+    return idx === -1 ? PRIORITY_ORDER.indexOf('medium') : idx;
+  }
+  function nextPriority(p) {
+    const idx = priorityIndex(p);
+    return PRIORITY_ORDER[(idx + 1) % PRIORITY_ORDER.length];
+  }
+  function priorityPill(p, dataAttr) {
+    const meta = PRIORITY_META[p] || PRIORITY_META.medium;
+    return `<button type="button" class="priority-pill" style="color:${meta.color}; background:${meta.bg};" ${dataAttr} aria-label="Cycle priority">${meta.label}</button>`;
+  }
+
+  // Updates a pill button's own label/colors directly, without a full
+  // render() — used for the "pending priority" pills on add-forms, so
+  // cycling the priority doesn't wipe out text already typed into the
+  // adjacent input (a full render() would rebuild it empty).
+  function patchPriorityPill(btn, priority) {
+    const meta = PRIORITY_META[priority] || PRIORITY_META.medium;
+    btn.textContent = meta.label;
+    btn.style.color = meta.color;
+    btn.style.background = meta.bg;
+  }
+
+  function normalize(raw) {
+    let s = raw ? JSON.parse(JSON.stringify(raw)) : structuredClone(defaultState);
+    if (!Array.isArray(s.projects)) s.projects = [];
+    s.projects.forEach(p => {
+      if (!Array.isArray(p.tasks)) p.tasks = [];
+      if (!Array.isArray(p.materials)) p.materials = [];
+      p.materials.forEach(m => {
+        if (typeof m.cost !== 'number' || isNaN(m.cost)) m.cost = null;
+      });
+      p.tasks.forEach(t => {
+        if (typeof t.addedBy !== 'string') t.addedBy = '';
+        if (!PRIORITY_ORDER.includes(t.priority)) t.priority = 'medium';
+      });
+      if (typeof p.budget !== 'number' || isNaN(p.budget)) p.budget = 0;
+      if (typeof p.collapsed !== 'boolean') p.collapsed = false;
+      if (typeof p.addedBy !== 'string') p.addedBy = '';
+      if (!PRIORITY_ORDER.includes(p.priority)) p.priority = 'medium';
+    });
+    return s;
+  }
+
+  function makeId(prefix) {
+    return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  async function load() {
+    try {
+      const snap = await docRef.get();
+      state = normalize(snap.exists ? snap.data() : null);
+      if (!snap.exists) {
+        await save();
+      }
+      render();
+
+      docRef.onSnapshot((snapshot) => {
+        if (!snapshot.exists) return;
+        state = normalize(snapshot.data());
+        render();
+      });
+    } catch (e) {
+      console.error('Firestore load failed', e);
+      state = structuredClone(defaultState);
+      app.innerHTML = '<div class="loading">Couldn\u2019t connect \u2014 check your connection and reload.</div>';
+    }
+  }
+
+  async function save() {
+    try {
+      await docRef.set(state);
+      if (window.trackPageUpdate) window.trackPageUpdate('house-projects');
+    } catch (e) {
+      console.error('Firestore save failed', e);
+    }
+  }
+
+  function houseSVG(fraction) {
+    // The house builds up in stages as tasks across all projects are completed:
+    // foundation -> walls -> roof -> door & windows -> chimney & finishing touches.
+    const stages = [
+      { op: Math.min(1, fraction / 0.15) },              // 0: foundation
+      { op: Math.min(1, Math.max(0,(fraction-0.12)) / 0.2) },  // 1: walls
+      { op: Math.min(1, Math.max(0,(fraction-0.35)) / 0.2) },  // 2: roof
+      { op: Math.min(1, Math.max(0,(fraction-0.55)) / 0.2) },  // 3: door & windows
+      { op: Math.min(1, Math.max(0,(fraction-0.78)) / 0.22) }  // 4: chimney & flag
+    ];
+    return `<svg viewBox="0 0 56 56" width="56" height="56">
+      <!-- ground line -->
+      <path d="M8 46 L48 46" stroke="#A9633F" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+      <!-- foundation -->
+      <rect x="13" y="42" width="30" height="5" rx="1" fill="#A9633F" style="opacity:${stages[0].op}; transition: opacity 0.4s ease;"/>
+      <!-- walls -->
+      <rect x="15" y="26" width="26" height="18" fill="#E6CCB4" stroke="#A9633F" stroke-width="2" style="opacity:${stages[1].op}; transition: opacity 0.4s ease;"/>
+      <!-- roof -->
+      <path d="M11 27 L28 13 L45 27 Z" fill="#8B5A3C" style="opacity:${stages[2].op}; transition: opacity 0.4s ease;"/>
+      <!-- door & windows -->
+      <g style="opacity:${stages[3].op}; transition: opacity 0.4s ease;">
+        <rect x="25" y="34" width="8" height="10" rx="1" fill="#7C9075"/>
+        <rect x="18" y="30" width="6" height="6" rx="1" fill="#5B7B9A"/>
+        <rect x="34" y="30" width="6" height="6" rx="1" fill="#5B7B9A"/>
+      </g>
+      <!-- chimney & flag -->
+      <g style="opacity:${stages[4].op}; transition: opacity 0.4s ease;">
+        <rect x="34" y="15" width="5" height="9" fill="#8B5A3C"/>
+        <path d="M28 13 L28 8" stroke="#7C9075" stroke-width="2" stroke-linecap="round"/>
+        <path d="M28 8 L33 10 L28 12 Z" fill="#B4636F"/>
+      </g>
+    </svg>`;
+  }
+
+  function checkIcon() {
+    return `<svg width="12" height="12" viewBox="0 0 14 14"><path d="M2 7L5.5 10.5L12 3" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function homeIcon() {
+    return `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 7.5L8 2.5L14 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M4 6.5V13H12V6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function themeIcon() {
+    return window.currentTheme === 'dark'
+      ? `<svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.5V3.2"/><path d="M8 12.8V14.5"/><path d="M1.5 8H3.2"/><path d="M12.8 8H14.5"/><path d="M3.4 3.4L4.6 4.6"/><path d="M11.4 11.4L12.6 12.6"/><path d="M12.6 3.4L11.4 4.6"/><path d="M4.6 11.4L3.4 12.6"/></g></svg>`
+      : `<svg width="15" height="15" viewBox="0 0 16 16"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5A5 5 0 0 0 13.5 9.5Z" fill="currentColor"/></svg>`;
+  }
+
+  function chevronIcon() {
+    return `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M5.5 3L11 8L5.5 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/"/g, '&quot;');
+  }
+
+  function formatMoney(n) {
+    return '$' + (Math.round(n * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function render() {
+    const dateLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    const totalTasksAll = state.projects.reduce((sum, p) => sum + p.tasks.length, 0);
+    const doneTasksAll = state.projects.reduce((sum, p) => sum + p.tasks.filter(t => t.done).length, 0);
+    const frac = totalTasksAll ? doneTasksAll / totalTasksAll : 0;
+
+    let html = '';
+    html += `<div class="header">
+      <div class="header-icons">
+        <a class="home-btn" href="home.html" aria-label="Home">${homeIcon()}</a>
+      </div>
+      <div class="header-text">
+        <h1>House Projects</h1>
+        <div class="date">${dateLabel}</div>
+      </div>
+      <div class="tool-wrap">${houseSVG(frac)}</div>
+    </div>`;
+
+    // Add project
+    html += `<div class="section">
+      <div class="eyebrow">Start Something New</div>
+      <h2>New project</h2>
+      <div class="add-row">
+        <input type="text" class="add-input" id="new-project-input" placeholder="e.g. Repaint the fence" autocomplete="off">
+        ${priorityPill(pendingProjectPriority, 'data-cycle-pending-project-priority')}
+        <button class="add-btn" id="add-project-btn" aria-label="Add project">+</button>
+      </div>
+    </div>`;
+
+    if (state.projects.length === 0) {
+      html += `<div class="section"><div class="empty-state">No projects yet \u2014 add the first thing you're planning to tackle.</div></div>`;
+    } else {
+      const orderedProjects = state.projects
+        .map((p, idx) => ({ p, idx }))
+        .sort((a, b) => {
+          const pa = priorityIndex(a.p.priority), pb = priorityIndex(b.p.priority);
+          if (pa !== pb) return pa - pb;
+          return a.idx - b.idx;
+        })
+        .map(x => x.p);
+      orderedProjects.forEach(p => {
+        const doneTasks = p.tasks.filter(t => t.done).length;
+        const totalTasks = p.tasks.length;
+        const pct = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
+        const spent = p.materials.reduce((sum, m) => sum + (typeof m.cost === 'number' ? m.cost : 0), 0);
+        const remaining = p.budget - spent;
+        const overBudget = p.budget > 0 && spent > p.budget;
+
+        html += `<div class="project-card" data-project="${p.id}">
+          <div class="project-top">
+            <button class="collapse-btn ${p.collapsed ? '' : 'open'}" data-toggle="${p.id}" aria-label="Expand/collapse">${chevronIcon()}</button>
+            ${priorityPill(p.priority, `data-cycle-project-priority="${p.id}"`)}
+            <input type="text" class="project-title-input" value="${escapeHtml(p.title)}" data-edit-title="${p.id}">
+            <button class="project-delete" data-delete-project="${p.id}" aria-label="Delete project">\u00d7</button>
+          </div>
+          ${p.addedBy ? `<div class="added-by" style="margin-left:34px; margin-top:-6px;">Started by ${escapeHtml(p.addedBy)}</div>` : ''}
+
+          <div class="progress-label">${totalTasks ? `${doneTasks} of ${totalTasks} tasks \u00b7 ${pct}%` : 'No tasks yet'}</div>
+          <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>
+
+          <div class="budget-row">
+            <div class="budget-field">
+              <label>Budget</label>
+              <input type="number" min="0" step="1" class="budget-input" value="${p.budget || ''}" placeholder="0" data-budget="${p.id}">
+            </div>
+            <div class="spent-readout ${p.budget > 0 ? (overBudget ? 'over' : 'under') : ''}">
+              ${formatMoney(spent)} spent${p.budget > 0 ? ` \u00b7 ${overBudget ? 'over by ' + formatMoney(Math.abs(remaining)) : formatMoney(remaining) + ' left'}` : ''}
+            </div>
+          </div>`;
+
+        if (!p.collapsed) {
+          html += `<div class="project-body">
+            <div class="subhead">Checklist</div>
+            <div class="mini-add-row">
+              <input type="text" class="mini-input" id="new-task-${p.id}" placeholder="Add a task" autocomplete="off">
+              ${priorityPill(pendingTaskPriority[p.id] || 'medium', `data-cycle-pending-task-priority="${p.id}"`)}
+              <button class="mini-add-btn" data-add-task="${p.id}" aria-label="Add task">+</button>
+            </div>`;
+
+          if (p.tasks.length === 0) {
+            html += `<div class="no-items">No tasks yet.</div>`;
+          } else {
+            const orderedTasks = p.tasks
+              .map((t, idx) => ({ t, idx }))
+              .sort((a, b) => {
+                if (a.t.done !== b.t.done) return a.t.done ? 1 : -1;
+                const pa = priorityIndex(a.t.priority), pb = priorityIndex(b.t.priority);
+                if (pa !== pb) return pa - pb;
+                return a.idx - b.idx;
+              })
+              .map(x => x.t);
+            orderedTasks.forEach(t => {
+              html += `<div class="task-row ${t.done ? 'done' : ''}">
+                <div class="checkbox ${t.done ? 'checked' : ''}" data-check-task="${p.id}|${t.id}">${checkIcon()}</div>
+                ${priorityPill(t.priority, `data-cycle-task-priority="${p.id}|${t.id}"`)}
+                <input type="text" class="task-label-input" value="${escapeAttr(t.text)}" data-edit-task="${p.id}|${t.id}">
+                ${t.addedBy ? `<span class="added-by" style="margin-left:2px;">\u2014 ${escapeHtml(t.addedBy)}</span>` : ''}
+                <button class="remove-btn" data-remove-task="${p.id}|${t.id}" aria-label="Remove task">\u00d7</button>
+              </div>`;
+            });
+          }
+
+          html += `<div class="subhead">Materials &amp; Costs</div>
+            <div class="mini-add-row">
+              <input type="text" class="mini-input" id="new-material-name-${p.id}" placeholder="Material" autocomplete="off">
+              <input type="number" min="0" step="0.01" class="mini-input cost-input" id="new-material-cost-${p.id}" placeholder="$">
+              <button class="mini-add-btn" data-add-material="${p.id}" aria-label="Add material">+</button>
+            </div>`;
+
+          if (p.materials.length === 0) {
+            html += `<div class="no-items">No materials logged yet.</div>`;
+          } else {
+            p.materials.forEach(m => {
+              html += `<div class="material-row">
+                <input type="text" class="material-name-input" value="${escapeAttr(m.name)}" data-edit-material-name="${p.id}|${m.id}">
+                <input type="number" min="0" step="0.01" class="material-cost-input" placeholder="\u2014" value="${m.cost === null || m.cost === undefined ? '' : m.cost}" data-material-cost="${p.id}|${m.id}">
+                <button class="remove-btn" data-remove-material="${p.id}|${m.id}" aria-label="Remove material">\u00d7</button>
+              </div>`;
+            });
+          }
+
+          html += `</div>`; // project-body
+        }
+
+        html += `</div>`; // project-card
+      });
+    }
+
+    html += `<div class="grace">Tap a project's arrow to collapse it once it's set up the way you like. Budgets are optional \u2014 leave one at 0 if you're not tracking cost for that project.<br><br>Synced live across your household \u2014 anyone with this page open sees updates instantly.</div>`;
+
+    app.innerHTML = html;
+    bindEvents();
+  }
+
+  function bindEvents() {
+
+    const projectInput = app.querySelector('#new-project-input');
+    const projectBtn = app.querySelector('#add-project-btn');
+    async function addProject() {
+      const title = projectInput.value.trim();
+      if (!title) return;
+      state.projects.push({
+        id: makeId('p'), title, budget: 0, collapsed: false, tasks: [], materials: [],
+        priority: pendingProjectPriority,
+        addedBy: (window.getHouseholdUserLabel && window.getHouseholdUserLabel()) || ''
+      });
+      projectInput.value = '';
+      await save();
+      render();
+    }
+    if (projectBtn) projectBtn.addEventListener('click', addProject);
+    if (projectInput) projectInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addProject(); });
+
+    const pendingProjectPriorityBtn = app.querySelector('[data-cycle-pending-project-priority]');
+    if (pendingProjectPriorityBtn) pendingProjectPriorityBtn.addEventListener('click', () => {
+      pendingProjectPriority = nextPriority(pendingProjectPriority);
+      patchPriorityPill(pendingProjectPriorityBtn, pendingProjectPriority);
+    });
+
+    app.querySelectorAll('[data-toggle]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = el.getAttribute('data-toggle');
+        const p = state.projects.find(x => x.id === id);
+        if (p) p.collapsed = !p.collapsed;
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-cycle-project-priority]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = el.getAttribute('data-cycle-project-priority');
+        const p = state.projects.find(x => x.id === id);
+        if (p) p.priority = nextPriority(p.priority);
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-edit-title]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const id = el.getAttribute('data-edit-title');
+        const p = state.projects.find(x => x.id === id);
+        const val = el.value.trim();
+        if (p && val) { p.title = val; await save(); }
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-delete-project]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = el.getAttribute('data-delete-project');
+        state.projects = state.projects.filter(p => p.id !== id);
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-budget]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const id = el.getAttribute('data-budget');
+        const p = state.projects.find(x => x.id === id);
+        const val = parseFloat(el.value);
+        if (p) { p.budget = isNaN(val) ? 0 : val; await save(); }
+        render();
+      });
+    });
+
+    state.projects.forEach(p => {
+      const taskInput = app.querySelector(`#new-task-${p.id}`);
+      const taskBtn = app.querySelector(`[data-add-task="${p.id}"]`);
+      async function addTask() {
+        if (!taskInput) return;
+        const text = taskInput.value.trim();
+        if (!text) return;
+        p.tasks.push({ id: makeId('t'), text, done: false, priority: pendingTaskPriority[p.id] || 'medium', addedBy: (window.getHouseholdUserLabel && window.getHouseholdUserLabel()) || '' });
+        await save();
+        render();
+      }
+      if (taskBtn) taskBtn.addEventListener('click', addTask);
+      if (taskInput) taskInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addTask(); });
+
+      const pendingTaskPriorityBtn = app.querySelector(`[data-cycle-pending-task-priority="${p.id}"]`);
+      if (pendingTaskPriorityBtn) pendingTaskPriorityBtn.addEventListener('click', () => {
+        pendingTaskPriority[p.id] = nextPriority(pendingTaskPriority[p.id] || 'medium');
+        patchPriorityPill(pendingTaskPriorityBtn, pendingTaskPriority[p.id]);
+      });
+
+      const matNameInput = app.querySelector(`#new-material-name-${p.id}`);
+      const matCostInput = app.querySelector(`#new-material-cost-${p.id}`);
+      const matBtn = app.querySelector(`[data-add-material="${p.id}"]`);
+      async function addMaterial() {
+        if (!matNameInput) return;
+        const name = matNameInput.value.trim();
+        if (!name) return;
+        const rawCost = matCostInput.value.trim();
+        const cost = rawCost === '' ? null : parseFloat(rawCost);
+        p.materials.push({ id: makeId('mt'), name, cost: (cost === null || isNaN(cost)) ? null : cost });
+        await save();
+        render();
+      }
+      if (matBtn) matBtn.addEventListener('click', addMaterial);
+      [matNameInput, matCostInput].forEach(inp => {
+        if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addMaterial(); } });
+      });
+    });
+
+    app.querySelectorAll('[data-check-task]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const [pid, tid] = el.getAttribute('data-check-task').split('|');
+        const p = state.projects.find(x => x.id === pid);
+        const t = p && p.tasks.find(x => x.id === tid);
+        if (t) {
+          t.done = !t.done;
+          if (window.recordAchievement) {
+            recordAchievement('project:task', t.done ? 1 : -1);
+            // Project-finished milestone: checking the final open task
+            // earns it; unchecking a task on a fully-complete project
+            // takes it back.
+            const allDone = p.tasks.length > 0 && p.tasks.every(x => x.done);
+            const othersAllDone = p.tasks.length > 0 && p.tasks.filter(x => x.id !== t.id).every(x => x.done);
+            if (t.done && allDone) recordAchievement('project:finished', 1);
+            else if (!t.done && othersAllDone) recordAchievement('project:finished', -1);
+          }
+        }
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-cycle-task-priority]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const [pid, tid] = el.getAttribute('data-cycle-task-priority').split('|');
+        const p = state.projects.find(x => x.id === pid);
+        const t = p && p.tasks.find(x => x.id === tid);
+        if (t) t.priority = nextPriority(t.priority);
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-remove-task]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const [pid, tid] = el.getAttribute('data-remove-task').split('|');
+        const p = state.projects.find(x => x.id === pid);
+        if (p) p.tasks = p.tasks.filter(t => t.id !== tid);
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-edit-task]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const [pid, tid] = el.getAttribute('data-edit-task').split('|');
+        const p = state.projects.find(x => x.id === pid);
+        const t = p && p.tasks.find(x => x.id === tid);
+        const val = el.value.trim();
+        if (t && val) { t.text = val; await save(); }
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-remove-material]').forEach(el => {
+      el.addEventListener('click', async () => {
+        const [pid, mid] = el.getAttribute('data-remove-material').split('|');
+        const p = state.projects.find(x => x.id === pid);
+        if (p) p.materials = p.materials.filter(m => m.id !== mid);
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-edit-material-name]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const [pid, mid] = el.getAttribute('data-edit-material-name').split('|');
+        const p = state.projects.find(x => x.id === pid);
+        const m = p && p.materials.find(x => x.id === mid);
+        const val = el.value.trim();
+        if (m && val) { m.name = val; await save(); }
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-material-cost]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const [pid, mid] = el.getAttribute('data-material-cost').split('|');
+        const p = state.projects.find(x => x.id === pid);
+        const m = p && p.materials.find(x => x.id === mid);
+        if (m) {
+          const raw = el.value.trim();
+          const val = raw === '' ? null : parseFloat(raw);
+          m.cost = (val === null || isNaN(val)) ? null : val;
+          await save();
+        }
+        render();
+      });
+    });
+  }
+
+  requireHouseholdAuth(function() {
+    trackPageVisit('house-projects');
+    initTheme();
+    load();
+  });
+})();
+</script>
+
+</body>
+</html>

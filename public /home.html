@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --bg: #EEF1EA;
+    --card: #FFFFFF;
+    --ink: #263029;
+    --muted: #6B7568;
+    --line: #DDE3D6;
+    --rose: #B4636F;
+    --rose-bg: #F6E8EA;
+    --gold: #C08A2E;
+    --gold-bg: #FBF1DE;
+    --sage: #7C9075;
+    --sage-bg: #E4EBDF;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+  }
+
+  #app {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 0 48px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .header {
+    padding: 36px 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .header-icons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .home-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.1);
+    text-decoration: none;
+    color: var(--ink);
+    flex-shrink: 0;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.12s ease;
+    font-family: inherit;
+  }
+  .home-btn:active { transform: scale(0.92); }
+  .star-btn { transition: transform 0.12s ease, box-shadow 0.12s ease; }
+  .star-btn:hover { box-shadow: 0 2px 8px rgba(192,138,46,0.35); }
+
+  .header h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 26px;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.01em;
+  }
+
+  .header .date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .link-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0 16px 14px 16px;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.06);
+    text-decoration: none;
+    color: var(--ink);
+    transition: transform 0.14s ease, box-shadow 0.14s ease;
+  }
+  .link-card:active { transform: scale(0.98); }
+
+  .link-card.tending { background: var(--sage-bg); }
+  .link-card.grocery { background: var(--gold-bg); }
+  .link-card.notes { background: var(--rose-bg); }
+  .link-card.meals { background: #DCE7EF; }
+  .link-card.wishlist { background: #E5DCEE; }
+  .link-card.projects { background: #EEDCC8; }
+  .link-card.contacts { background: #CFE7E0; }
+  .link-card.stars { background: #F4E4B4; }
+
+  .icon-wrap {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .link-text .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 3px 0;
+  }
+  .link-card.tending .eyebrow { color: #52603F; }
+  .link-card.grocery .eyebrow { color: #8A6417; }
+  .link-card.notes .eyebrow { color: #92464F; }
+  .link-card.meals .eyebrow { color: #3F5A73; }
+  .link-card.wishlist .eyebrow { color: #6D5589; }
+  .link-card.projects .eyebrow { color: #8A4E2E; }
+  .link-card.contacts .eyebrow { color: #2E6459; }
+  .link-card.stars .eyebrow { color: #7A5A10; }
+
+  .link-text h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 18px;
+    margin: 0 0 3px 0;
+  }
+
+  .link-text p {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .updated-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    opacity: 0.65;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 6px;
+  }
+  .updated-label.recent {
+    color: var(--sage);
+    opacity: 1;
+    font-weight: 600;
+  }
+
+  .chevron {
+    margin-left: auto;
+    flex-shrink: 0;
+    color: var(--muted);
+    opacity: 0.6;
+  }
+
+  .grace {
+    margin: 24px 20px 0;
+    padding: 16px 18px;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .theme-row {
+    display: flex;
+    justify-content: center;
+    margin: 20px 20px 0;
+  }
+  .theme-toggle-wide {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card);
+    color: var(--ink);
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    padding: 10px 20px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.12s ease;
+  }
+  .theme-toggle-wide:hover { border-color: var(--sage); }
+  .theme-toggle-wide:active { transform: scale(0.97); }
+  .theme-toggle-icon {
+    display: inline-flex;
+    color: var(--gold);
+  }
+
+  /* Dark mode: overriding the same custom property names cascades through
+     every rule above automatically, since they all reference var(--x). */
+  html[data-theme="dark"] {
+    --bg: #1B1E1A;
+    --card: #242821;
+    --ink: #E9ECE4;
+    --muted: #93A18F;
+    --line: #33372E;
+    --rose: #E08A96;
+    --rose-bg: #3A2429;
+    --gold: #E0A94A;
+    --gold-bg: #3A2E17;
+    --sage: #9DBB92;
+    --sage-bg: #29332A;
+  }
+  html[data-theme="dark"] .link-card.meals { background: #223541; }
+  html[data-theme="dark"] .link-card.wishlist { background: #332740; }
+  html[data-theme="dark"] .link-card.projects { background: #3A2C1E; }
+  html[data-theme="dark"] .link-card.contacts { background: #1F3833; }
+  html[data-theme="dark"] .link-card.stars { background: #3D3012; }
+</style>
+</head>
+<body style="margin:0;">
+<script src="theme.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="auth.js"></script>
+<script src="visits.js"></script>
+<div id="app"></div>
+
+<script>
+(function() {
+  const firebaseConfig = {
+    apiKey: "AIzaSyAzJ9EFIGW1l5-IgmrD2MyGTe8_WIcL3hs",
+    authDomain: "tendingtoday-f30e4.firebaseapp.com",
+    projectId: "tendingtoday-f30e4",
+    storageBucket: "tendingtoday-f30e4.firebasestorage.app",
+    messagingSenderId: "334824670755",
+    appId: "1:334824670755:web:c21c47bc292f8ed711d396",
+    measurementId: "G-LJ7XZP3FE1"
+  };
+  firebase.initializeApp(firebaseConfig);
+
+  async function renderHub() {
+  const now = new Date();
+  const dateLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+
+  let visits = {};
+  try {
+    const snap = await firebase.firestore().collection('household').doc('page-visit-counts').get();
+    if (snap.exists) visits = snap.data() || {};
+  } catch (e) {
+    console.error('Could not load visit counts', e);
+  }
+
+  let updates = {};
+  try {
+    const snap = await firebase.firestore().collection('household').doc('page-last-updated').get();
+    if (snap.exists) updates = snap.data() || {};
+  } catch (e) {
+    console.error('Could not load last-updated timestamps', e);
+  }
+
+  function relativeTime(date) {
+    const diffSec = Math.round((Date.now() - date.getTime()) / 1000);
+    if (diffSec < 60) return 'just now';
+    const diffMin = Math.round(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.round(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDay = Math.round(diffHr / 24);
+    if (diffDay < 7) return `${diffDay}d ago`;
+    const diffWeek = Math.round(diffDay / 7);
+    if (diffWeek < 5) return `${diffWeek}w ago`;
+    const diffMonth = Math.round(diffDay / 30);
+    return `${diffMonth}mo ago`;
+  }
+
+  function plantIcon() {
+    return `<svg viewBox="0 0 56 56" width="40" height="40">
+      <path d="M28 44 C 20 40, 16 30, 22 22" stroke="#7C9075" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+      <path d="M28 44 C 36 40, 40 30, 34 22" stroke="#7C9075" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+      <path d="M28 40 C 24 32, 24 20, 30 12" stroke="#7C9075" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+      <path d="M28 40 C 32 32, 32 18, 26 10" stroke="#7C9075" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+      <path d="M14 44 L42 44 L38 54 L18 54 Z" fill="#B4636F" opacity="0.85"/>
+      <rect x="12" y="42" width="32" height="4" rx="2" fill="#92464F"/>
+    </svg>`;
+  }
+
+  function basketIcon() {
+    return `<svg viewBox="0 0 56 56" width="40" height="40">
+      <path d="M14 24 L42 24 L38 46 L18 46 Z" fill="none" stroke="#C08A2E" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M20 24 L24 12" stroke="#C08A2E" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+      <path d="M36 24 L32 12" stroke="#C08A2E" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+      <path d="M20 32 L22 40" stroke="#C08A2E" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.6"/>
+      <path d="M28 32 L28 40" stroke="#C08A2E" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.6"/>
+      <path d="M36 32 L34 40" stroke="#C08A2E" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.6"/>
+    </svg>`;
+  }
+
+  function chevron() {
+    return `<svg width="20" height="20" viewBox="0 0 20 20"><path d="M7.5 4.5L13 10L7.5 15.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function moonIcon() {
+    return `<svg width="15" height="15" viewBox="0 0 16 16"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5A5 5 0 0 0 13.5 9.5Z" fill="currentColor"/></svg>`;
+  }
+
+  function themeIcon() {
+    return window.currentTheme === 'dark'
+      ? `<svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.5V3.2"/><path d="M8 12.8V14.5"/><path d="M1.5 8H3.2"/><path d="M12.8 8H14.5"/><path d="M3.4 3.4L4.6 4.6"/><path d="M11.4 11.4L12.6 12.6"/><path d="M12.6 3.4L11.4 4.6"/><path d="M4.6 11.4L3.4 12.6"/></g></svg>`
+      : `<svg width="15" height="15" viewBox="0 0 16 16"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5A5 5 0 0 0 13.5 9.5Z" fill="currentColor"/></svg>`;
+  }
+
+  function pinboardIcon() {
+    return `<svg viewBox="0 0 56 56" width="40" height="40">
+      <rect x="8" y="6" width="40" height="44" rx="6" fill="#E7CFA0" stroke="#8A6417" stroke-width="2.5"/>
+      <circle cx="20" cy="20" r="3.4" fill="#B4636F"/>
+      <circle cx="36" cy="20" r="3.4" fill="#7C9075"/>
+      <circle cx="28" cy="16" r="3.6" fill="#C08A2E"/>
+      <circle cx="16" cy="33" r="3.2" fill="#7C9075"/>
+      <circle cx="40" cy="33" r="3.2" fill="#B4636F"/>
+      <circle cx="28" cy="37" r="3.6" fill="#C08A2E"/>
+    </svg>`;
+  }
+
+  function potIcon() {
+    return `<svg viewBox="0 0 56 56" width="40" height="40">
+      <circle cx="20" cy="30" r="4" fill="#C08A2E"/>
+      <circle cx="34" cy="30" r="4" fill="#7C9075"/>
+      <circle cx="27" cy="22" r="4.2" fill="#B4636F"/>
+      <path d="M13 34 L43 34 L38 44 Q28 48.5 18 44 Z" fill="none" stroke="#5B7B9A" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M13 34 L43 34" stroke="#5B7B9A" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M11 32 L15 32" stroke="#5B7B9A" stroke-width="3" stroke-linecap="round"/>
+      <path d="M41 32 L45 32" stroke="#5B7B9A" stroke-width="3" stroke-linecap="round"/>
+    </svg>`;
+  }
+
+  function giftIcon() {
+    return `<svg viewBox="0 0 56 56" width="40" height="40">
+      <rect x="9" y="32" width="38" height="17" rx="2.5" fill="#8B6FA8"/>
+      <rect x="25" y="32" width="6" height="17" fill="#71578C"/>
+      <rect x="9" y="32" width="38" height="4.8" fill="#71578C" opacity="0.55"/>
+      <rect x="14" y="20" width="28" height="14" rx="2.5" fill="#B4636F"/>
+      <rect x="25.5" y="20" width="5" height="14" fill="#96525C"/>
+      <rect x="14" y="20" width="28" height="3.9" fill="#96525C" opacity="0.55"/>
+      <rect x="19" y="9" width="18" height="12" rx="2.5" fill="#5B7B9A"/>
+      <rect x="26" y="9" width="4" height="12" fill="#496781"/>
+      <rect x="19" y="9" width="18" height="3.4" fill="#496781" opacity="0.55"/>
+    </svg>`;
+  }
+
+  function toolboxIcon() {
+    return `<svg viewBox="0 0 56 56" width="40" height="40">
+      <path d="M8 46 L48 46" stroke="#A9633F" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+      <rect x="13" y="42" width="30" height="5" rx="1" fill="#A9633F"/>
+      <rect x="15" y="26" width="26" height="18" fill="#E6CCB4" stroke="#A9633F" stroke-width="2"/>
+      <path d="M11 27 L28 13 L45 27 Z" fill="#8B5A3C"/>
+      <rect x="25" y="34" width="8" height="10" rx="1" fill="#7C9075"/>
+      <rect x="18" y="30" width="6" height="6" rx="1" fill="#5B7B9A"/>
+      <rect x="34" y="30" width="6" height="6" rx="1" fill="#5B7B9A"/>
+      <rect x="34" y="15" width="5" height="9" fill="#8B5A3C"/>
+    </svg>`;
+  }
+
+  function bookIcon() {
+    return `<svg viewBox="0 0 56 56" width="40" height="40">
+      <rect x="12" y="10" width="30" height="38" rx="4" fill="#FFFFFF" stroke="#3F7F73" stroke-width="2.5"/>
+      <path d="M12 16 L42 16" stroke="#CFE7E0" stroke-width="2"/>
+      <circle cx="24" cy="26" r="4.5" fill="#CFE7E0"/>
+      <path d="M17 40 C17 34 31 34 31 40" fill="#CFE7E0"/>
+      <rect x="36" y="20" width="8" height="4" rx="1.5" fill="#B4636F"/>
+      <rect x="36" y="28" width="8" height="4" rx="1.5" fill="#C08A2E"/>
+      <rect x="36" y="36" width="8" height="4" rx="1.5" fill="#7C9075"/>
+    </svg>`;
+  }
+
+  function starBtnIcon() {
+    return `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 1.6 L9.9 5.7 L14.4 6.2 L11 9.3 L11.9 13.8 L8 11.5 L4.1 13.8 L5 9.3 L1.6 6.2 L6.1 5.7 Z" fill="#E8B33C" stroke="#C08A2E" stroke-width="1" stroke-linejoin="round"/></svg>`;
+  }
+
+  const app = document.getElementById('app');
+
+  const cards = [
+    {
+      key: 'tending-today', href: 'tending-today.html', cls: 'tending', icon: plantIcon(),
+      eyebrow: 'Daily &amp; Weekly', title: 'Tending Today',
+      desc: 'Foundations, zone of the day, deep tasks &amp; pet upkeep'
+    },
+    {
+      key: 'grocery-list', href: 'grocery-list.html', cls: 'grocery', icon: basketIcon(),
+      eyebrow: 'Running List', title: 'Grocery List',
+      desc: 'Add as you run out, check off in the cart, clear after shopping'
+    },
+    {
+      key: 'notes', href: 'notes.html', cls: 'notes', icon: pinboardIcon(),
+      eyebrow: 'Shared Board', title: 'Household Notes',
+      desc: 'Reminders, plans &amp; things to bring up later'
+    },
+    {
+      key: 'meal-planning', href: 'meal-planning.html', cls: 'meals', icon: potIcon(),
+      eyebrow: "This Week's Kitchen", title: 'Meal Planning',
+      desc: 'Ingredients on hand, meal ideas &amp; saved recipe links'
+    },
+    {
+      key: 'wishlist', href: 'wishlist.html', cls: 'wishlist', icon: giftIcon(),
+      eyebrow: 'Gift Ideas', title: 'Wishlist',
+      desc: 'Separate lists for Nat &amp; Neal, with links to the goods'
+    },
+    {
+      key: 'house-projects', href: 'house-projects.html', cls: 'projects', icon: toolboxIcon(),
+      eyebrow: 'Bigger Jobs', title: 'House Projects',
+      desc: 'Checklists, budgets &amp; material costs per project'
+    },
+    {
+      key: 'contacts', href: 'contacts.html', cls: 'contacts', icon: bookIcon(),
+      eyebrow: 'Who To Call', title: 'Contacts',
+      desc: 'Plumber, vet, landlord &amp; everyone else, one tap away'
+    }
+  ];
+
+  // Sort by visit count, most-visited first. Array.prototype.sort is stable,
+  // so pages with equal (or missing/zero) counts keep their original order
+  // above — meaning on a fresh install, before any visits are tracked, the
+  // order is unchanged from the original layout.
+  cards.sort((a, b) => (visits[b.key] || 0) - (visits[a.key] || 0));
+
+  // Figure out which single card (if any) was updated most recently, so we
+  // can call it out distinctly rather than labeling every card.
+  let mostRecentKey = null;
+  let mostRecentMs = -Infinity;
+  cards.forEach(c => {
+    const ts = updates[c.key];
+    if (ts && typeof ts.toDate === 'function') {
+      const ms = ts.toDate().getTime();
+      if (ms > mostRecentMs) { mostRecentMs = ms; mostRecentKey = c.key; }
+    }
+  });
+
+  let html = '';
+  html += `<div class="header">
+    <div class="header-icons">
+      <a class="home-btn star-btn" href="achievements.html" aria-label="Star Board">${starBtnIcon()}</a>
+    </div>
+    <div>
+      <h1>Household</h1>
+      <div class="date">${dateLabel}</div>
+    </div>
+  </div>`;
+
+  cards.forEach(c => {
+    const ts = updates[c.key];
+    const isRecent = c.key === mostRecentKey;
+    let updatedHtml = '';
+    if (ts && typeof ts.toDate === 'function') {
+      const label = relativeTime(ts.toDate());
+      updatedHtml = `<div class="updated-label${isRecent ? ' recent' : ''}">${isRecent ? '\u25CF ' : ''}Updated ${label}</div>`;
+    }
+    html += `<a class="link-card ${c.cls}" href="${c.href}">
+      <div class="icon-wrap">${c.icon}</div>
+      <div class="link-text">
+        <div class="eyebrow">${c.eyebrow}</div>
+        <h2>${c.title}</h2>
+        <p>${c.desc}</p>
+        ${updatedHtml}
+      </div>
+      <div class="chevron">${chevron()}</div>
+    </a>`;
+  });
+
+  html += `<div class="grace">Synced live across your household \u2014 anyone with these pages open sees updates instantly. Cards above reorder themselves by how often each page gets opened.</div>`;
+
+  html += `<div class="theme-row">
+    <button class="theme-toggle-wide" type="button" id="theme-toggle-btn">
+      <span class="theme-toggle-icon">${themeIcon()}</span>
+      <span>${window.currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}</span>
+    </button>
+  </div>`;
+
+  app.innerHTML = html;
+
+  const themeBtn = document.getElementById('theme-toggle-btn');
+  if (themeBtn) themeBtn.addEventListener('click', () => { if (window.toggleTheme) window.toggleTheme(); renderHub(); });
+  } // end renderHub
+
+  // When theme.js corrects the theme after its async Firestore fetch, re-render
+  // so the bottom toggle's icon and label reflect the real current theme.
+  window.onThemeChange = function () { if (document.getElementById('app').children.length) renderHub(); };
+
+  requireHouseholdAuth(function () {
+    initTheme();
+    renderHub();
+  });
+})();
+</script>
+
+</body>
+</html>
