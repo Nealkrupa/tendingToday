@@ -1,0 +1,10 @@
+{
+  "hosting": {
+    "public": "/Users/nealkrupa/Documents/tendingToday/tendingToday/public ",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}
