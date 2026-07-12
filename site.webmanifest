@@ -1,6 +1,6 @@
 {
-  "name": "TendingToday",
-  "short_name": "Tending",
+  "name": "HomeSOP",
+  "short_name": "HomeSOP",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
@@ -16,7 +16,7 @@
     }
   ],
   "start_url": "/home.html",
-  "theme_color": "#EEF1EA",
-  "background_color": "#EEF1EA",
+  "theme_color": "#515055",
+  "background_color": "#515055",
   "display": "standalone"
 }
