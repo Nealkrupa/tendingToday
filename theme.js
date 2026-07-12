@@ -36,9 +36,17 @@
     return `<svg width="15" height="15" viewBox="0 0 16 16"><circle cx="8" cy="8" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.5V3.2"/><path d="M8 12.8V14.5"/><path d="M1.5 8H3.2"/><path d="M12.8 8H14.5"/><path d="M3.4 3.4L4.6 4.6"/><path d="M11.4 11.4L12.6 12.6"/><path d="M12.6 3.4L11.4 4.6"/><path d="M4.6 11.4L3.4 12.6"/></g></svg>`;
   }
 
+  function applyThemeColorMeta(theme) {
+    try {
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', theme === 'dark' ? '#1B1E1A' : '#EEF1EA');
+    } catch (e) { /* no-op */ }
+  }
+
   function applyTheme(theme) {
     window.currentTheme = theme;
     document.documentElement.setAttribute('data-theme', theme);
+    applyThemeColorMeta(theme);
     writeCache(theme);
     const btn = document.getElementById('theme-toggle-btn');
     if (btn) {
@@ -56,6 +64,7 @@
   // screen, loading state) is already correct.
   window.currentTheme = readCache() || 'light';
   document.documentElement.setAttribute('data-theme', window.currentTheme);
+  applyThemeColorMeta(window.currentTheme);
 
   // Call once auth has resolved. Confirms (or corrects) the guess above
   // against the authoritative value stored for this account in Firestore.
