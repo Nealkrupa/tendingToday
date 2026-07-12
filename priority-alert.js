@@ -91,6 +91,19 @@
       top: 0;
       will-change: transform;
     }
+    #priority-alert-banner .priority-alert-ticker-copy {
+      display: inline-block;
+      padding-right: 48px;
+    }
+    #priority-alert-banner .priority-alert-critical-badge {
+      display: inline-block;
+      background: #FFFFFF;
+      color: #B71C1C;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-right: 2px;
+    }
   `;
   document.head.appendChild(style);
 
@@ -139,7 +152,11 @@
 
     const noteBits = [];
     (criticalItems || []).forEach((it) => {
-      noteBits.push(`🔴 Critical (${timeAgo(it.priorityAt)}): “${escapeHtml(snippet(it.text))}”`);
+      // Critical gets an inverted (white-on-red) badge rather than a plain
+      // 🔴, which reads as noticeably dimmer than 🟡 against this banner's
+      // solid red background on most platforms — Critical needs to be the
+      // loudest thing here, not the quietest.
+      noteBits.push(`<span class="priority-alert-critical-badge">🚨 CRITICAL</span> (${timeAgo(it.priorityAt)}): “${escapeHtml(snippet(it.text))}”`);
     });
     (highItems || []).forEach((it) => {
       noteBits.push(`🟡 High (${timeAgo(it.priorityAt)}): “${escapeHtml(snippet(it.text))}”`);
@@ -152,6 +169,13 @@
   // ticker text's actual rendered width. Keeps the summary held in place
   // for PAUSE_SECONDS before crawling the rest of the text leftward, then
   // loops. Re-measures on every render since note text/length changes.
+  //
+  // The ticker element always contains the text rendered TWICE back-to-back
+  // (see renderBanner). Scrolling by exactly one copy's width means that the
+  // instant the animation resets from 100% back to 0%, the second copy —
+  // which is sitting exactly where the first copy started — is already
+  // showing in its place, so the reset is invisible and the text appears to
+  // loop around continuously instead of snapping back to its start position.
   function setupTicker() {
     const ticker = document.getElementById('priority-alert-ticker-text');
     const track = ticker && ticker.parentElement;
@@ -161,14 +185,23 @@
     // Force reflow so the browser re-measures before we read widths / restart the animation.
     void ticker.offsetWidth;
 
-    const contentWidth = ticker.scrollWidth;
-    const trackWidth = track.clientWidth;
-    if (contentWidth <= trackWidth) {
-      return; // fits in the visible area — no need to scroll
-    }
+    const copies = ticker.querySelectorAll('.priority-alert-ticker-copy');
+    const firstCopy = copies[0];
+    const secondCopy = copies[1];
+    if (!firstCopy) return;
 
-    const travel = (contentWidth - trackWidth) + 24;
-    const scrollSeconds = travel / SCROLL_PX_PER_SEC;
+    const copyWidth = firstCopy.scrollWidth;
+    const trackWidth = track.clientWidth;
+
+    if (copyWidth <= trackWidth) {
+      // Fits without scrolling — hide the duplicate so it doesn't just sit
+      // there doubled-up with nothing to do.
+      if (secondCopy) secondCopy.style.display = 'none';
+      return;
+    }
+    if (secondCopy) secondCopy.style.display = '';
+
+    const scrollSeconds = copyWidth / SCROLL_PX_PER_SEC;
     const totalSeconds = PAUSE_SECONDS + scrollSeconds;
     const pausePercent = (PAUSE_SECONDS / totalSeconds) * 100;
 
@@ -183,7 +216,7 @@
       @keyframes priorityAlertTicker {
         0% { transform: translateX(0); }
         ${pausePercent.toFixed(2)}% { transform: translateX(0); }
-        100% { transform: translateX(-${travel}px); }
+        100% { transform: translateX(-${copyWidth}px); }
       }
     `;
     ticker.style.animation = `priorityAlertTicker ${totalSeconds.toFixed(2)}s linear infinite`;
@@ -198,7 +231,9 @@
     }
     el.style.display = 'flex';
     const text = buildTickerText(criticalCount, highCount, criticalItems, highItems);
-    el.innerHTML = `<span class="priority-alert-icon">⚠️</span><div class="priority-alert-track"><span class="priority-alert-ticker" id="priority-alert-ticker-text">${text}</span></div>`;
+    // Rendered twice so setupTicker can scroll by exactly one copy's width
+    // and loop seamlessly — see the comment on setupTicker for why.
+    el.innerHTML = `<span class="priority-alert-icon">⚠️</span><div class="priority-alert-track"><span class="priority-alert-ticker" id="priority-alert-ticker-text"><span class="priority-alert-ticker-copy">${text}</span><span class="priority-alert-ticker-copy" aria-hidden="true">${text}</span></span></div>`;
     // Measure after paint so scrollWidth/clientWidth are accurate.
     requestAnimationFrame(setupTicker);
   }
