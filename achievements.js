@@ -112,6 +112,20 @@
     return 4 + Math.floor((count - BADGE_TIERS[3]) / 500);
   };
 
+  // Single source of truth for how bright the shimmer sweep is at each tier.
+  // Kept here (not duplicated as separate rgba() alphas across every page's
+  // stylesheet) specifically so a brightness tweak like this one only ever
+  // needs to change in one place. Tier 4 is a badge's first 500; tier 5+
+  // (1000, 1500, ...) all share the same top brightness rather than climbing
+  // forever, so things don't eventually become distractingly bright.
+  const BADGE_OPACITIES = [0, 0.05, 0.10, 0.20, 0.35, 0.60];
+
+  window.badgeShimmerOpacity = function (tier) {
+    if (tier <= 0) return 0;
+    if (tier < BADGE_OPACITIES.length) return BADGE_OPACITIES[tier];
+    return BADGE_OPACITIES[BADGE_OPACITIES.length - 1];
+  };
+
   // Same 6-color rotation the Star Board uses for its own prestige laps
   // (see achievements.html's PRESTIGE_PALETTES), reused here so a badge
   // deep into its "every 500" tiers cycles through a familiar palette
