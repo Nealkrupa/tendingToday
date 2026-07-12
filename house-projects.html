@@ -505,6 +505,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="auth.js"></script>
 <script src="visits.js"></script>
+<script src="priority-alert.js"></script>
 <script src="achievements.js"></script>
 <div id="app"></div>
 
@@ -1041,6 +1042,7 @@
   requireHouseholdAuth(function() {
     trackPageVisit('house-projects');
     initTheme();
+    initPriorityAlertBanner();
     load();
   });
 })();
