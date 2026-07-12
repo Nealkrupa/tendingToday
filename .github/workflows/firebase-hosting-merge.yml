@@ -17,3 +17,4 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TENDINGTODAY_F30E4 }}
           channelId: live
           projectId: tendingtoday-f30e4
+          firebaseToolsVersion: 15.23.0

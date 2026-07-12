@@ -18,3 +18,4 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TENDINGTODAY_F30E4 }}
           projectId: tendingtoday-f30e4
+          firebaseToolsVersion: 15.23.0
