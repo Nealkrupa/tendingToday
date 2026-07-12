@@ -43,7 +43,7 @@
       gap: 8px;
       position: sticky;
       top: 0;
-      z-index: 500;
+      z-index: 10050;
       width: 100%;
       padding: 10px 16px;
       background: #D32F2F;
