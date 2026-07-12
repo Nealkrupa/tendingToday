@@ -5,7 +5,35 @@
 //
 // Fully self-contained: injects its own <style> block, so no page needs any
 // CSS changes to support it.
+//
+// Same two-layer pattern as theme.js: a cached last-known count is rendered
+// immediately (before Firebase/auth even resolves), so the banner persists
+// through the sign-in check and the page's own "Getting things ready..."
+// loading flash instead of flickering off and back on between pages. The
+// live Firestore subscription then corrects it with the real, current count.
 (function () {
+  const CACHE_KEY = 'priorityAlertCache';
+
+  function readCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (typeof parsed.critical === 'number' && typeof parsed.high === 'number') return parsed;
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeCache(critical, high) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ critical, high }));
+    } catch (e) {
+      // ignore — localStorage may be unavailable; live data still works
+    }
+  }
+
   const style = document.createElement('style');
   style.textContent = `
     #priority-alert-banner {
@@ -62,14 +90,23 @@
     el.innerHTML = `<span class="priority-alert-icon">\u26A0\uFE0F</span><span>${parts.join(' \u00b7 ')} priority note${total === 1 ? '' : 's'} unresolved</span>`;
   }
 
+  // Runs immediately as the script is parsed — before Firebase, before auth,
+  // before anything else on the page. Paints the last-known state from this
+  // browser's cache so the banner doesn't disappear and reappear between
+  // pages while the real data loads.
+  const cached = readCache();
+  if (cached) renderBanner(cached.critical, cached.high);
+
   // Call once auth has resolved. Subscribes live, so the banner appears,
   // updates, or disappears in real time on every open page as notes are
-  // added, reprioritized, or resolved anywhere in the household.
+  // added, reprioritized, or resolved anywhere in the household — and
+  // refreshes the cache each time so the next page load's instant guess
+  // stays accurate.
   window.initPriorityAlertBanner = function () {
     try {
       const db = firebase.firestore();
       db.collection('household').doc('household-notes-state').onSnapshot((snap) => {
-        if (!snap.exists) { renderBanner(0, 0); return; }
+        if (!snap.exists) { renderBanner(0, 0); writeCache(0, 0); return; }
         const data = snap.data() || {};
         const items = Array.isArray(data.items) ? data.items : [];
         let critical = 0, high = 0;
@@ -80,6 +117,7 @@
           }
         });
         renderBanner(critical, high);
+        writeCache(critical, high);
       }, (err) => console.error('Priority alert banner failed', err));
     } catch (e) {
       console.error('Priority alert banner failed', e);
