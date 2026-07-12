@@ -95,6 +95,42 @@
     return total;
   };
 
+  // Threshold ladder for each page's header badge: quiet under 10, then a
+  // step up in shimmer intensity at 10/100/250/500, then a further step
+  // every additional 500 forever (500, 1000, 1500, 2000, ...). This is a
+  // purely a display tier derived from the count each page already has —
+  // no new stored data — and it's independent of the Star Board's own
+  // prestige laps, which track the combined total across every achievement
+  // key rather than one page's single number.
+  const BADGE_TIERS = [10, 100, 250, 500];
+
+  window.badgeTierForCount = function (count) {
+    if (count < BADGE_TIERS[0]) return 0;
+    if (count < BADGE_TIERS[1]) return 1;
+    if (count < BADGE_TIERS[2]) return 2;
+    if (count < BADGE_TIERS[3]) return 3;
+    return 4 + Math.floor((count - BADGE_TIERS[3]) / 500);
+  };
+
+  // Same 6-color rotation the Star Board uses for its own prestige laps
+  // (see achievements.html's PRESTIGE_PALETTES), reused here so a badge
+  // deep into its "every 500" tiers cycles through a familiar palette
+  // instead of just glowing brighter forever. Only meaningful from tier 4
+  // (a page's first 500) onward.
+  const BADGE_PALETTES = [
+    { edge: '#C0862E', shimmer: '#FFF6D6' }, // Radiant / gold
+    { edge: '#B4636F', shimmer: '#FFE1E3' }, // Crimson
+    { edge: '#5E7756', shimmer: '#E9F7E0' }, // Verdant
+    { edge: '#4E6E8E', shimmer: '#E3F2FC' }, // Azure
+    { edge: '#7C5EA0', shimmer: '#F4E9FC' }, // Amethyst
+    { edge: '#3E4650', shimmer: '#E8D9A8' }  // Obsidian
+  ];
+
+  window.badgePaletteForTier = function (tier) {
+    if (tier < 4) return null;
+    return BADGE_PALETTES[(tier - 4) % BADGE_PALETTES.length];
+  };
+
   window.recordPerfectDay = async function (todayStr) {
     try {
       const db = firebase.firestore();

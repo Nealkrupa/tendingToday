@@ -105,8 +105,73 @@
     font-family: 'IBM Plex Mono', monospace;
     font-size: 13px;
     font-weight: 600;
-    color: var(--muted);
+    color: var(--blue);
+    background: var(--blue-bg);
+    padding: 3px 10px;
+    border-radius: 999px;
     font-variant-numeric: tabular-nums;
+    position: relative;
+    overflow: hidden;
+  }
+
+  @keyframes countPop {
+    0% { transform: scale(1); }
+    45% { transform: scale(1.28); }
+    100% { transform: scale(1); }
+  }
+
+  .progress-count.count-pop {
+    animation: countPop 0.45s ease;
+  }
+
+  .progress-count.shimmer-t1::after,
+  .progress-count.shimmer-t2::after,
+  .progress-count.shimmer-t3::after,
+  .progress-count.shimmer-prestige::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -60%;
+    width: 45%;
+    height: 100%;
+    background: linear-gradient(120deg, transparent, rgba(255,255,255,0.65), transparent);
+    animation: badgeShimmer 3.4s ease-in-out infinite;
+  }
+
+  .progress-count.shimmer-t2::after {
+    background: linear-gradient(120deg, transparent, rgba(255,255,255,0.8), transparent);
+    animation-duration: 2.8s;
+  }
+
+  .progress-count.shimmer-t2 {
+    box-shadow: 0 0 5px 0 var(--blue-bg);
+  }
+
+  .progress-count.shimmer-t3::after {
+    background: linear-gradient(120deg, transparent, rgba(255,255,255,0.95), transparent);
+    animation-duration: 2.2s;
+  }
+
+  .progress-count.shimmer-t3 {
+    font-weight: 700;
+    box-shadow: 0 0 8px 1px var(--blue-bg);
+  }
+
+  .progress-count.shimmer-prestige {
+    font-weight: 700;
+    color: var(--badge-edge, var(--blue));
+    box-shadow: 0 0 10px 2px var(--badge-edge, var(--blue-bg));
+  }
+
+  .progress-count.shimmer-prestige::after {
+    background: linear-gradient(120deg, transparent, var(--badge-shimmer, rgba(255,255,255,0.95)), transparent);
+    animation-duration: 1.7s;
+  }
+
+  @keyframes badgeShimmer {
+    0% { left: -60%; }
+    55% { left: 130%; }
+    100% { left: 130%; }
   }
 
   .section {
@@ -434,7 +499,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="auth.js?v=1"></script>
 <script src="visits.js?v=1"></script>
-<script src="achievements.js?v=2"></script>
+<script src="achievements.js?v=4"></script>
 <div id="app"></div>
 
 <script>
@@ -462,6 +527,7 @@
   let state = null;
   let recipeSearchTerm = '';
   let achievementCounts = {};
+  let prevLifetimeCount = null;
   const app = document.getElementById('app');
   app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
 
@@ -627,6 +693,13 @@
     const lifetimeCount = window.sumAchievementCounts
       ? window.sumAchievementCounts(achievementCounts, ['meal:recipe'])
       : 0;
+    const didIncrease = prevLifetimeCount !== null && lifetimeCount > prevLifetimeCount;
+    prevLifetimeCount = lifetimeCount;
+    const badgeTier = window.badgeTierForCount ? window.badgeTierForCount(lifetimeCount) : 0;
+    const tierClass = badgeTier >= 4 ? 'shimmer-prestige' : badgeTier === 3 ? 'shimmer-t3' : badgeTier === 2 ? 'shimmer-t2' : badgeTier === 1 ? 'shimmer-t1' : '';
+    const badgePalette = badgeTier >= 4 && window.badgePaletteForTier ? window.badgePaletteForTier(badgeTier) : null;
+    const badgeStyle = badgePalette ? ` style="--badge-edge:${badgePalette.edge}; --badge-shimmer:${badgePalette.shimmer};"` : '';
+    const countClasses = ['progress-count', tierClass, didIncrease ? 'count-pop' : ''].filter(Boolean).join(' ');
 
     let html = '';
     html += `<div class="header">
@@ -639,7 +712,7 @@
       </div>
       <div class="icon-progress">
         <div class="pot-wrap">${potSVG(ingFrac)}</div>
-        <div class="progress-count" aria-label="Lifetime recipes added">${lifetimeCount}</div>
+        <div class="${countClasses}"${badgeStyle} aria-label="Lifetime recipes added">${lifetimeCount}</div>
       </div>
     </div>`;
 
