@@ -236,8 +236,10 @@
     flex-shrink: 0;
     white-space: nowrap;
     transition: transform 0.1s ease;
+    -webkit-appearance: menulist;
+    appearance: menulist;
   }
-  .priority-pill:active { transform: scale(0.94); }
+  .priority-pill:active { transform: scale(0.97); }
 
   .added-by {
     font-family: 'IBM Plex Mono', monospace;
@@ -540,8 +542,12 @@
   const db = firebase.firestore();
   const docRef = db.collection('household').doc('house-projects-state');
 
-  // Priority tags — cycles Critical -> High -> Medium -> Low on tap, and
-  // drives auto-sort everywhere (lower index = higher priority = sorts first).
+  // Priority tags — a small dropdown (Critical/High/Medium/Low) that drives
+  // auto-sort everywhere (lower index = higher priority = sorts first).
+  // Deliberately a dropdown rather than a tap-to-cycle control: cycling
+  // required multiple taps to reach a distant priority, and the list
+  // re-sorts (jumping the item) after every single tap — a dropdown lets
+  // you land on the exact target priority in one action instead.
   const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
   const PRIORITY_META = {
     critical: { label: 'Critical', color: 'var(--rose)', bg: 'var(--rose-bg)' },
@@ -553,24 +559,23 @@
     const idx = PRIORITY_ORDER.indexOf(p);
     return idx === -1 ? PRIORITY_ORDER.indexOf('medium') : idx;
   }
-  function nextPriority(p) {
-    const idx = priorityIndex(p);
-    return PRIORITY_ORDER[(idx + 1) % PRIORITY_ORDER.length];
-  }
   function priorityPill(p, dataAttr) {
     const meta = PRIORITY_META[p] || PRIORITY_META.medium;
-    return `<button type="button" class="priority-pill" style="color:${meta.color}; background:${meta.bg};" ${dataAttr} aria-label="Cycle priority">${meta.label}</button>`;
+    const options = PRIORITY_ORDER.map(opt => {
+      const om = PRIORITY_META[opt];
+      return `<option value="${opt}" ${opt === p ? 'selected' : ''}>${om.label}</option>`;
+    }).join('');
+    return `<select class="priority-pill" style="color:${meta.color}; background:${meta.bg};" ${dataAttr} aria-label="Set priority">${options}</select>`;
   }
 
-  // Updates a pill button's own label/colors directly, without a full
-  // render() — used for the "pending priority" pills on add-forms, so
-  // cycling the priority doesn't wipe out text already typed into the
-  // adjacent input (a full render() would rebuild it empty).
-  function patchPriorityPill(btn, priority) {
+  // Updates a pill's own colors directly (matching whatever option is now
+  // selected), without a full render() — used for the "pending priority"
+  // dropdowns on add-forms, so changing it doesn't wipe out text already
+  // typed into the adjacent input (a full render() would rebuild it empty).
+  function patchPriorityPill(el, priority) {
     const meta = PRIORITY_META[priority] || PRIORITY_META.medium;
-    btn.textContent = meta.label;
-    btn.style.color = meta.color;
-    btn.style.background = meta.bg;
+    el.style.color = meta.color;
+    el.style.background = meta.bg;
   }
 
   function normalize(raw) {
@@ -848,8 +853,8 @@
     if (projectInput) projectInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addProject(); });
 
     const pendingProjectPriorityBtn = app.querySelector('[data-cycle-pending-project-priority]');
-    if (pendingProjectPriorityBtn) pendingProjectPriorityBtn.addEventListener('click', () => {
-      pendingProjectPriority = nextPriority(pendingProjectPriority);
+    if (pendingProjectPriorityBtn) pendingProjectPriorityBtn.addEventListener('change', () => {
+      pendingProjectPriority = pendingProjectPriorityBtn.value;
       patchPriorityPill(pendingProjectPriorityBtn, pendingProjectPriority);
     });
 
@@ -864,10 +869,10 @@
     });
 
     app.querySelectorAll('[data-cycle-project-priority]').forEach(el => {
-      el.addEventListener('click', async () => {
+      el.addEventListener('change', async () => {
         const id = el.getAttribute('data-cycle-project-priority');
         const p = state.projects.find(x => x.id === id);
-        if (p) p.priority = nextPriority(p.priority);
+        if (p) p.priority = el.value;
         await save();
         render();
       });
@@ -917,8 +922,8 @@
       if (taskInput) taskInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addTask(); });
 
       const pendingTaskPriorityBtn = app.querySelector(`[data-cycle-pending-task-priority="${p.id}"]`);
-      if (pendingTaskPriorityBtn) pendingTaskPriorityBtn.addEventListener('click', () => {
-        pendingTaskPriority[p.id] = nextPriority(pendingTaskPriority[p.id] || 'medium');
+      if (pendingTaskPriorityBtn) pendingTaskPriorityBtn.addEventListener('change', () => {
+        pendingTaskPriority[p.id] = pendingTaskPriorityBtn.value;
         patchPriorityPill(pendingTaskPriorityBtn, pendingTaskPriority[p.id]);
       });
 
@@ -965,11 +970,11 @@
     });
 
     app.querySelectorAll('[data-cycle-task-priority]').forEach(el => {
-      el.addEventListener('click', async () => {
+      el.addEventListener('change', async () => {
         const [pid, tid] = el.getAttribute('data-cycle-task-priority').split('|');
         const p = state.projects.find(x => x.id === pid);
         const t = p && p.tasks.find(x => x.id === tid);
-        if (t) t.priority = nextPriority(t.priority);
+        if (t) t.priority = el.value;
         await save();
         render();
       });

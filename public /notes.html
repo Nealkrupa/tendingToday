@@ -220,8 +220,10 @@
     white-space: nowrap;
     transition: transform 0.1s ease;
     margin-top: 1px;
+    -webkit-appearance: menulist;
+    appearance: menulist;
   }
-  .priority-pill:active { transform: scale(0.94); }
+  .priority-pill:active { transform: scale(0.97); }
 
   .note-input {
     flex: 1;
@@ -415,8 +417,11 @@
   const db = firebase.firestore();
   const docRef = db.collection('household').doc('household-notes-state');
 
-  // Priority tags — cycles Critical -> High -> Medium -> Low on tap, and
-  // drives auto-sort (lower index = higher priority = sorts first).
+  // Priority tags — a small dropdown (Critical/High/Medium/Low) that drives
+  // auto-sort (lower index = higher priority = sorts first). Deliberately a
+  // dropdown rather than tap-to-cycle: cycling required multiple taps to
+  // reach a distant priority, and the list re-sorts (jumping the item)
+  // after every tap — a dropdown lands on the exact target in one action.
   const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low'];
   const PRIORITY_META = {
     critical: { label: 'Critical', color: 'var(--rose)', bg: 'var(--rose-bg)' },
@@ -428,24 +433,24 @@
     const idx = PRIORITY_ORDER.indexOf(p);
     return idx === -1 ? PRIORITY_ORDER.indexOf('medium') : idx;
   }
-  function nextPriority(p) {
-    const idx = priorityIndex(p);
-    return PRIORITY_ORDER[(idx + 1) % PRIORITY_ORDER.length];
-  }
   function priorityPill(p, dataAttr) {
     const meta = PRIORITY_META[p] || PRIORITY_META.medium;
-    return `<button type="button" class="priority-pill" style="color:${meta.color}; background:${meta.bg};" ${dataAttr} aria-label="Cycle priority">${meta.label}</button>`;
+    const options = PRIORITY_ORDER.map(opt => {
+      const om = PRIORITY_META[opt];
+      return `<option value="${opt}" ${opt === p ? 'selected' : ''}>${om.label}</option>`;
+    }).join('');
+    return `<select class="priority-pill" style="color:${meta.color}; background:${meta.bg};" ${dataAttr} aria-label="Set priority">${options}</select>`;
   }
 
-  // Updates a pill button's own label/colors directly, without a full
-  // render() — used for the "pending priority" pill on the add-note form,
-  // so cycling the priority doesn't wipe out text already typed into the
-  // adjacent input (a full render() would rebuild it empty).
-  function patchPriorityPill(btn, priority) {
+  // Updates a pill's own colors directly (matching whatever option is now
+  // selected), without a full render() — used for the "pending priority"
+  // dropdown on the add-note form, so changing it doesn't wipe out text
+  // already typed into the adjacent input (a full render() would rebuild
+  // it empty).
+  function patchPriorityPill(el, priority) {
     const meta = PRIORITY_META[priority] || PRIORITY_META.medium;
-    btn.textContent = meta.label;
-    btn.style.color = meta.color;
-    btn.style.background = meta.bg;
+    el.style.color = meta.color;
+    el.style.background = meta.bg;
   }
 
   function normalizeAndReset(raw) {
@@ -673,8 +678,8 @@
     });
 
     const pendingNotePriorityBtn = app.querySelector('[data-cycle-pending-note-priority]');
-    if (pendingNotePriorityBtn) pendingNotePriorityBtn.addEventListener('click', () => {
-      pendingNotePriority = nextPriority(pendingNotePriority);
+    if (pendingNotePriorityBtn) pendingNotePriorityBtn.addEventListener('change', () => {
+      pendingNotePriority = pendingNotePriorityBtn.value;
       patchPriorityPill(pendingNotePriorityBtn, pendingNotePriority);
     });
 
@@ -692,10 +697,10 @@
     });
 
     app.querySelectorAll('[data-cycle-note-priority]').forEach(el => {
-      el.addEventListener('click', async () => {
+      el.addEventListener('change', async () => {
         const id = el.getAttribute('data-cycle-note-priority');
         const it = state.items.find(i => i.id === id);
-        if (it) it.priority = nextPriority(it.priority);
+        if (it) it.priority = el.value;
         await save();
         render();
       });
