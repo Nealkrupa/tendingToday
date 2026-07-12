@@ -92,6 +92,21 @@
     flex-shrink: 0;
   }
 
+  .icon-progress {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .progress-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
   .section {
     margin: 0 16px 16px 16px;
     background: var(--card);
@@ -360,7 +375,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="auth.js?v=1"></script>
 <script src="visits.js?v=1"></script>
-<script src="achievements.js?v=1"></script>
+<script src="achievements.js?v=2"></script>
 <div id="app"></div>
 
 <script>
@@ -401,6 +416,7 @@
   let pendingNotePriority = 'medium';
 
   let state = null;
+  let achievementCounts = {};
   const app = document.getElementById('app');
   app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
 
@@ -571,6 +587,9 @@
     // Board fills up as active notes pile up, clears as they're resolved. Caps out around 6 pins.
     const frac = Math.min(1, activeItems.length / 6);
     const dateLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    const lifetimeCount = window.sumAchievementCounts
+      ? window.sumAchievementCounts(achievementCounts, ['note:resolved'])
+      : 0;
 
     let html = '';
     html += `<div class="header">
@@ -581,7 +600,10 @@
         <h1>Household Notes</h1>
         <div class="date">${dateLabel}</div>
       </div>
-      <div class="board-wrap">${pinboardSVG(frac)}</div>
+      <div class="icon-progress">
+        <div class="board-wrap">${pinboardSVG(frac)}</div>
+        <div class="progress-count" aria-label="Lifetime notes resolved">${lifetimeCount}</div>
+      </div>
     </div>`;
 
     // Add note
@@ -750,6 +772,12 @@
     trackPageVisit('notes');
     initTheme();
     initPriorityAlertBanner();
+    if (window.subscribeAchievementCounts) {
+      window.subscribeAchievementCounts(function (counts) {
+        achievementCounts = counts;
+        if (state) render();
+      });
+    }
     load();
   });
 })();

@@ -92,6 +92,21 @@
     flex-shrink: 0;
   }
 
+  .icon-progress {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .progress-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
   .section {
     margin: 0 16px 16px 16px;
     background: var(--card);
@@ -297,6 +312,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="auth.js?v=1"></script>
 <script src="visits.js?v=1"></script>
+<script src="achievements.js?v=2"></script>
 <div id="app"></div>
 
 <script>
@@ -314,6 +330,7 @@
   };
 
   let state = null;
+  let achievementCounts = {};
   const app = document.getElementById('app');
   app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
 
@@ -426,6 +443,9 @@
     // Basket fills up as items pile onto the list, empties as they're checked off. Caps out around 8 items.
     const frac = Math.min(1, uncheckedCount / 8);
     const dateLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    const lifetimeCount = window.sumAchievementCounts
+      ? window.sumAchievementCounts(achievementCounts, ['grocery:item'])
+      : 0;
 
     // Unchecked first, checked pushed to the bottom; stable within each group
     const ordered = items
@@ -445,7 +465,10 @@
         <h1>Grocery List</h1>
         <div class="date">${dateLabel}</div>
       </div>
-      <div class="plant-wrap">${basketSVG(frac)}</div>
+      <div class="icon-progress">
+        <div class="plant-wrap">${basketSVG(frac)}</div>
+        <div class="progress-count" aria-label="Lifetime items shopped for">${lifetimeCount}</div>
+      </div>
     </div>`;
 
     // Add item
@@ -518,7 +541,10 @@
       el.addEventListener('click', async () => {
         const id = el.getAttribute('data-check');
         const it = state.items.find(i => i.id === id);
-        if (it) it.done = !it.done;
+        if (it) {
+          it.done = !it.done;
+          if (window.recordAchievement) recordAchievement('grocery:item', it.done ? 1 : -1);
+        }
         await save();
         render();
       });
@@ -546,6 +572,12 @@
     trackPageVisit('grocery-list');
     initTheme();
     initPriorityAlertBanner();
+    if (window.subscribeAchievementCounts) {
+      window.subscribeAchievementCounts(function (counts) {
+        achievementCounts = counts;
+        if (state) render();
+      });
+    }
     load();
   });
 })();

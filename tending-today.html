@@ -92,6 +92,21 @@
     flex-shrink: 0;
   }
 
+  .icon-progress {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .progress-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
   .section {
     margin: 0 16px 16px 16px;
     background: var(--card);
@@ -248,7 +263,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="auth.js?v=1"></script>
 <script src="visits.js?v=1"></script>
-<script src="achievements.js?v=1"></script>
+<script src="achievements.js?v=2"></script>
 <div id="app"></div>
 
 <script>
@@ -374,6 +389,7 @@
   };
 
   let state = null;
+  let achievementCounts = {};
   const app = document.getElementById('app');
   app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
 
@@ -497,6 +513,9 @@
     const nowLive = new Date();
     const dateLabel = nowLive.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
     const zone = currentZone();
+    const lifetimeCount = window.sumAchievementCounts
+      ? window.sumAchievementCounts(achievementCounts, ['daily:', 'zone:', 'deep:', 'pet:brush'])
+      : 0;
 
     let html = '';
     html += `<div class="header">
@@ -507,7 +526,10 @@
         <h1>Tending Today</h1>
         <div class="date">${dateLabel}</div>
       </div>
-      <div class="plant-wrap">${plantSVG(frac)}</div>
+      <div class="icon-progress">
+        <div class="plant-wrap">${plantSVG(frac)}</div>
+        <div class="progress-count" aria-label="Lifetime tasks completed">${lifetimeCount}</div>
+      </div>
     </div>`;
 
     // Daily foundations
@@ -614,6 +636,12 @@
     trackPageVisit('tending-today');
     initTheme();
     initPriorityAlertBanner();
+    if (window.subscribeAchievementCounts) {
+      window.subscribeAchievementCounts(function (counts) {
+        achievementCounts = counts;
+        if (state) render();
+      });
+    }
     load();
 
     // Belt-and-suspenders: if this tab is left open across a day or week

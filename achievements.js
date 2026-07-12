@@ -58,6 +58,43 @@
     }
   };
 
+  // Live read-side companion to recordAchievement/recordPerfectDay: pages
+  // that want to show a permanent, lifetime count next to their own header
+  // icon (rather than just writing to the Star Board) call this once with a
+  // callback; it fires immediately with whatever's cached and again on every
+  // change, from any device, via onSnapshot — same live-sync pattern as
+  // priority-alert.js. Returns the unsubscribe function in case a page ever
+  // needs to tear it down.
+  window.subscribeAchievementCounts = function (cb) {
+    try {
+      const db = firebase.firestore();
+      const ref = db.collection('household').doc('achievements-state');
+      return ref.onSnapshot((snap) => {
+        const data = snap.exists ? snap.data() : {};
+        cb(data.counts || {});
+      }, (e) => {
+        console.error('Achievement counts subscription failed', e);
+      });
+    } catch (e) {
+      console.error('Achievement counts subscription failed', e);
+      return function () {};
+    }
+  };
+
+  // Sums every count whose key matches one of the given exact keys or
+  // prefixes (prefixes end in ':' and match keys like 'daily:bed'). Used by
+  // pages whose lifetime number is a combination of several achievement
+  // keys (e.g. Tending Today combines daily/zone/deep/pet keys into one
+  // number), so each page doesn't need to hand-roll the same reduce.
+  window.sumAchievementCounts = function (counts, matchers) {
+    let total = 0;
+    Object.keys(counts || {}).forEach((key) => {
+      const hit = matchers.some((m) => (m.endsWith(':') ? key.startsWith(m) : key === m));
+      if (hit) total += counts[key] || 0;
+    });
+    return total;
+  };
+
   window.recordPerfectDay = async function (todayStr) {
     try {
       const db = firebase.firestore();

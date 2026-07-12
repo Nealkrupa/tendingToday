@@ -94,6 +94,21 @@
     flex-shrink: 0;
   }
 
+  .icon-progress {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .progress-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
   .section {
     margin: 0 16px 16px 16px;
     background: var(--card);
@@ -419,6 +434,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="auth.js?v=1"></script>
 <script src="visits.js?v=1"></script>
+<script src="achievements.js?v=2"></script>
 <div id="app"></div>
 
 <script>
@@ -445,6 +461,7 @@
 
   let state = null;
   let recipeSearchTerm = '';
+  let achievementCounts = {};
   const app = document.getElementById('app');
   app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
 
@@ -607,6 +624,9 @@
     const dateLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
     const ingFrac = Math.min(1, state.ingredients.length / 10);
     const selectedRecipes = state.recipes.filter(r => r.selected);
+    const lifetimeCount = window.sumAchievementCounts
+      ? window.sumAchievementCounts(achievementCounts, ['meal:recipe'])
+      : 0;
 
     let html = '';
     html += `<div class="header">
@@ -617,7 +637,10 @@
         <h1>Meal Planning</h1>
         <div class="date">${dateLabel}</div>
       </div>
-      <div class="pot-wrap">${potSVG(ingFrac)}</div>
+      <div class="icon-progress">
+        <div class="pot-wrap">${potSVG(ingFrac)}</div>
+        <div class="progress-count" aria-label="Lifetime recipes added">${lifetimeCount}</div>
+      </div>
     </div>`;
 
     // Meals for the week (derived from checked recipes below)
@@ -770,6 +793,7 @@
       });
       titleInput.value = '';
       urlInput.value = '';
+      if (window.recordAchievement) recordAchievement('meal:recipe', 1);
       await save();
       render();
     }
@@ -811,6 +835,7 @@
       el.addEventListener('click', async () => {
         const id = el.getAttribute('data-remove-recipe');
         state.recipes = state.recipes.filter(r => r.id !== id);
+        if (window.recordAchievement) recordAchievement('meal:recipe', -1);
         await save();
         render();
       });
@@ -839,6 +864,12 @@
     trackPageVisit('meal-planning');
     initTheme();
     initPriorityAlertBanner();
+    if (window.subscribeAchievementCounts) {
+      window.subscribeAchievementCounts(function (counts) {
+        achievementCounts = counts;
+        if (state) render();
+      });
+    }
     load();
   });
 })();
