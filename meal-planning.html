@@ -246,6 +246,20 @@
     margin: 4px 2px 0;
     padding-top: 4px;
   }
+  .search-input {
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+    margin: 10px 0 4px;
+  }
+  .search-input:focus { border-color: var(--blue); }
+
   .count-label {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 11px;
@@ -430,6 +444,7 @@
   };
 
   let state = null;
+  let recipeSearchTerm = '';
   const app = document.getElementById('app');
   app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
 
@@ -658,22 +673,36 @@
     if (state.recipes.length === 0) {
       html += `<div class="empty-state">No recipes saved yet \u2014 add the first one you want to keep on hand.</div>`;
     } else {
-      state.recipes.forEach(r => {
-        html += `<div class="recipe-row" data-id="${r.id}">
-          <div class="checkbox ${r.selected ? 'checked' : ''}" data-select="${r.id}" aria-label="Plan for this week">${checkIcon()}</div>
-          <div class="recipe-main">
-            <input type="text" class="recipe-title-input" value="${escapeAttr(r.title)}" placeholder="Recipe name" data-edit="${r.id}|title">
-            <div class="recipe-link-row">
-              <input type="text" class="recipe-link-input" value="${escapeAttr(r.url)}" placeholder="Link (optional)" data-edit="${r.id}|url">
-              ${r.url ? `<a class="icon-btn" href="${r.url}" target="_blank" rel="noopener noreferrer" aria-label="Open link">${linkIcon()}</a>` : ''}
+      const term = recipeSearchTerm.trim().toLowerCase();
+      const filteredRecipes = term
+        ? state.recipes.filter(r =>
+            r.title.toLowerCase().includes(term) ||
+            (r.details || '').toLowerCase().includes(term) ||
+            (r.url || '').toLowerCase().includes(term))
+        : state.recipes;
+
+      html += `<input type="text" class="search-input" id="recipe-search-input" placeholder="Search recipes by name or ingredients" value="${escapeAttr(recipeSearchTerm)}">`;
+
+      if (filteredRecipes.length === 0) {
+        html += `<div class="empty-state">No recipes match "${escapeHtml(recipeSearchTerm)}".</div>`;
+      } else {
+        filteredRecipes.forEach(r => {
+          html += `<div class="recipe-row" data-id="${r.id}">
+            <div class="checkbox ${r.selected ? 'checked' : ''}" data-select="${r.id}" aria-label="Plan for this week">${checkIcon()}</div>
+            <div class="recipe-main">
+              <input type="text" class="recipe-title-input" value="${escapeAttr(r.title)}" placeholder="Recipe name" data-edit="${r.id}|title">
+              <div class="recipe-link-row">
+                <input type="text" class="recipe-link-input" value="${escapeAttr(r.url)}" placeholder="Link (optional)" data-edit="${r.id}|url">
+                ${r.url ? `<a class="icon-btn" href="${r.url}" target="_blank" rel="noopener noreferrer" aria-label="Open link">${linkIcon()}</a>` : ''}
+              </div>
+              <textarea class="recipe-details-input" rows="1" placeholder="Add ingredients or recipe notes (optional)" data-edit-details="${r.id}">${escapeHtml(r.details)}</textarea>
+              ${r.addedBy ? `<div class="added-by">Added by ${escapeHtml(r.addedBy)}</div>` : ''}
             </div>
-            <textarea class="recipe-details-input" rows="1" placeholder="Add ingredients or recipe notes (optional)" data-edit-details="${r.id}">${escapeHtml(r.details)}</textarea>
-            ${r.addedBy ? `<div class="added-by">Added by ${escapeHtml(r.addedBy)}</div>` : ''}
-          </div>
-          <button class="remove-btn" data-remove-recipe="${r.id}" aria-label="Delete recipe">\u00d7</button>
-        </div>`;
-      });
-      html += `<div class="count-label" style="margin-top:8px;">${state.recipes.length} recipe${state.recipes.length === 1 ? '' : 's'} \u00b7 ${selectedRecipes.length} planned this week</div>`;
+            <button class="remove-btn" data-remove-recipe="${r.id}" aria-label="Delete recipe">\u00d7</button>
+          </div>`;
+        });
+      }
+      html += `<div class="count-label" style="margin-top:8px;">${filteredRecipes.length} of ${state.recipes.length} recipe${state.recipes.length === 1 ? '' : 's'} \u00b7 ${selectedRecipes.length} planned this week</div>`;
     }
     html += `</div>`;
 
@@ -684,6 +713,19 @@
   }
 
   function bindEvents() {
+
+    const recipeSearchInput = app.querySelector('#recipe-search-input');
+    if (recipeSearchInput) {
+      recipeSearchInput.addEventListener('input', () => {
+        recipeSearchTerm = recipeSearchInput.value;
+        render();
+        const fresh = app.querySelector('#recipe-search-input');
+        if (fresh) {
+          fresh.focus();
+          fresh.setSelectionRange(fresh.value.length, fresh.value.length);
+        }
+      });
+    }
 
     // Ingredients
     const ingInput = app.querySelector('#new-ingredient-input');
