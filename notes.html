@@ -432,7 +432,7 @@
 </head>
 <body style="margin:0;">
 <script src="theme.js?v=1"></script>
-<script src="priority-alert.js?v=1"></script>
+<script src="priority-alert.js?v=2"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -471,7 +471,7 @@
   const defaultState = {
     weekKey: wk,
     items: []
-    // each item: { id, text, done }
+    // each item: { id, text, done, priority, priorityAt, addedBy, comment }
   };
 
   // In-memory only (not saved) — the priority for the *next* new note, set
@@ -482,7 +482,7 @@
   let achievementCounts = {};
   let prevLifetimeCount = null;
   const app = document.getElementById('app');
-  app.innerHTML = '<div class="loading">Getting things ready\u2026</div>';
+  app.innerHTML = '<div class="loading">Getting things ready…</div>';
 
   // --- Firebase setup (same project as Tending Today, separate document) ---
   const firebaseConfig = {
@@ -510,6 +510,9 @@
     medium:   { label: 'Medium',   color: 'var(--sage)', bg: 'var(--sage-bg)' },
     low:      { label: 'Low',      color: 'var(--muted)', bg: 'var(--line)' }
   };
+  function isElevatedPriority(p) {
+    return p === 'critical' || p === 'high';
+  }
   function priorityIndex(p) {
     const idx = PRIORITY_ORDER.indexOf(p);
     return idx === -1 ? PRIORITY_ORDER.indexOf('medium') : idx;
@@ -543,6 +546,17 @@
       if (typeof it.comment !== 'string') { it.comment = ''; changed = true; }
       if (typeof it.addedBy !== 'string') { it.addedBy = ''; changed = true; }
       if (!PRIORITY_ORDER.includes(it.priority)) { it.priority = 'medium'; changed = true; }
+      if (typeof it.priorityAt !== 'number') {
+        // Backfill: we don't know the true history for existing notes, so
+        // the best available guess for an already-elevated note is "now"
+        // (rather than silently showing a blank/zero time-in-priority).
+        it.priorityAt = isElevatedPriority(it.priority) ? Date.now() : null;
+        changed = true;
+      }
+      if (!isElevatedPriority(it.priority) && it.priorityAt !== null) {
+        it.priorityAt = null;
+        changed = true;
+      }
     });
     if (s.weekKey !== wkNow) {
       // New week: completed notes clear out automatically, so you can see
@@ -579,7 +593,7 @@
     } catch (e) {
       console.error('Firestore load failed', e);
       state = structuredClone(defaultState);
-      app.innerHTML = '<div class="loading">Couldn\u2019t connect \u2014 check your connection and reload.</div>';
+      app.innerHTML = '<div class="loading">Couldn’t connect — check your connection and reload.</div>';
     }
   }
 
@@ -696,7 +710,7 @@
       <h2>On our minds</h2>`;
 
     if (activeItems.length === 0) {
-      html += `<div class="empty-state">Nothing pinned yet \u2014 add something you don't want to forget.</div>`;
+      html += `<div class="empty-state">Nothing pinned yet — add something you don't want to forget.</div>`;
     } else {
       activeItems.forEach((it, i) => {
         const accent = ACCENTS[i % ACCENTS.length];
@@ -705,9 +719,9 @@
           ${priorityPill(it.priority, `data-cycle-note-priority="${it.id}"`)}
           <div class="note-main">
             <textarea class="note-input" rows="1" data-edit="${it.id}">${escapeHtml(it.text)}</textarea>
-            ${it.addedBy ? `<div class="added-by">\u2014 ${escapeHtml(it.addedBy)}</div>` : ''}
+            ${it.addedBy ? `<div class="added-by">— ${escapeHtml(it.addedBy)}</div>` : ''}
           </div>
-          <button class="remove-btn" data-remove="${it.id}" aria-label="Remove note">\u00d7</button>
+          <button class="remove-btn" data-remove="${it.id}" aria-label="Remove note">×</button>
         </div>`;
       });
       html += `<div class="count-label" style="margin-top:8px;">${activeItems.length} active note${activeItems.length === 1 ? '' : 's'}</div>`;
@@ -716,7 +730,7 @@
 
     // Completed this week
     html += `<div class="section">
-      <div class="eyebrow">Resolved \u2014 Since Last Reset</div>
+      <div class="eyebrow">Resolved — Since Last Reset</div>
       <h2>Completed this week</h2>`;
 
     if (doneItems.length === 0) {
@@ -728,17 +742,17 @@
           ${priorityPill(it.priority, `data-cycle-note-priority="${it.id}"`)}
           <div class="note-main">
             <textarea class="note-input" rows="1" data-edit="${it.id}">${escapeHtml(it.text)}</textarea>
-            ${it.addedBy ? `<div class="added-by">\u2014 ${escapeHtml(it.addedBy)}</div>` : ''}
+            ${it.addedBy ? `<div class="added-by">— ${escapeHtml(it.addedBy)}</div>` : ''}
             <textarea class="note-comment-input" rows="1" placeholder="Add a comment (optional)" data-comment="${it.id}">${escapeHtml(it.comment)}</textarea>
           </div>
-          <button class="remove-btn" data-remove="${it.id}" aria-label="Remove note">\u00d7</button>
+          <button class="remove-btn" data-remove="${it.id}" aria-label="Remove note">×</button>
         </div>`;
       });
       html += `<div class="count-label" style="margin-top:8px;">${doneItems.length} completed this week</div>`;
     }
     html += `</div>`;
 
-    html += `<div class="grace">Anything worth remembering goes here \u2014 plans, reminders, things to bring up later. Checking one off moves it into "Completed this week" so you can see what got handled; that section clears itself automatically at the start of each new week.<br><br>Synced live across your household \u2014 anyone with this page open sees updates instantly.</div>`;
+    html += `<div class="grace">Anything worth remembering goes here — plans, reminders, things to bring up later. Checking one off moves it into "Completed this week" so you can see what got handled; that section clears itself automatically at the start of each new week.<br><br>Synced live across your household — anyone with this page open sees updates instantly.</div>`;
 
     app.innerHTML = html;
     bindEvents();
@@ -762,7 +776,14 @@
     async function addNote() {
       const text = input.value.trim();
       if (!text) return;
-      state.items.push({ id: makeId(), text, done: false, priority: pendingNotePriority, addedBy: (window.getHouseholdUserLabel && window.getHouseholdUserLabel()) || '' });
+      state.items.push({
+        id: makeId(),
+        text,
+        done: false,
+        priority: pendingNotePriority,
+        priorityAt: isElevatedPriority(pendingNotePriority) ? Date.now() : null,
+        addedBy: (window.getHouseholdUserLabel && window.getHouseholdUserLabel()) || ''
+      });
       input.value = '';
       await save();
       render();
@@ -798,7 +819,14 @@
       el.addEventListener('change', async () => {
         const id = el.getAttribute('data-cycle-note-priority');
         const it = state.items.find(i => i.id === id);
-        if (it) it.priority = el.value;
+        if (it) {
+          // Every genuine change (this only fires when the selected value
+          // differs from before) to Critical/High restarts the "time at
+          // this priority" clock used by the site-wide alert banner's
+          // ticker; dropping back to Medium/Low clears it.
+          it.priority = el.value;
+          it.priorityAt = isElevatedPriority(el.value) ? Date.now() : null;
+        }
         await save();
         render();
       });
