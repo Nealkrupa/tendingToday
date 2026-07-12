@@ -21,6 +21,7 @@
   const CACHE_KEY = 'priorityAlertCache';
   const PAUSE_SECONDS = 3.5;    // how long the summary holds before scrolling
   const SCROLL_PX_PER_SEC = 55; // ticker scroll speed
+  let lastTrackWidth = null;    // set by setupTicker(); used to ignore spurious resize events
 
   function readCache() {
     try {
@@ -192,6 +193,7 @@
 
     const copyWidth = firstCopy.scrollWidth;
     const trackWidth = track.clientWidth;
+    lastTrackWidth = trackWidth;
 
     if (copyWidth <= trackWidth) {
       // Fits without scrolling — hide the duplicate so it doesn't just sit
@@ -278,7 +280,18 @@
     }
   };
 
+  // Mobile browsers (iOS Safari/Chrome in particular) fire a `resize` event
+  // when the address bar shows/hides as the page is scrolled — that changes
+  // window height, not the banner's width, but a naive resize handler would
+  // still call setupTicker() and reset the animation, which is exactly what
+  // looked like the ticker "snapping back" while scrolling. Only re-run the
+  // ticker setup when the track's actual width changed.
   window.addEventListener('resize', () => {
-    if (document.getElementById('priority-alert-ticker-text')) setupTicker();
+    const ticker = document.getElementById('priority-alert-ticker-text');
+    if (!ticker) return;
+    const track = ticker.parentElement;
+    const currentWidth = track ? track.clientWidth : null;
+    if (currentWidth !== null && currentWidth === lastTrackWidth) return;
+    setupTicker();
   });
 })();
