@@ -458,6 +458,10 @@
     if (key === 'note:resolved') return 'Notes resolved';
     if (key === 'project:task') return 'Project tasks completed';
     if (key === 'project:finished') return 'Projects finished';
+    if (key === 'grocery:item') return 'Groceries shopped for';
+    if (key === 'wishlist:item') return 'Wishlist items added';
+    if (key === 'meal:recipe') return 'Recipes added';
+    if (key === 'contact:added') return 'Contacts added';
     if (key.indexOf('daily:') === 0) return DAILY_LABELS[key.slice(6)] || key.slice(6);
     if (key.indexOf('zone:') === 0) return 'Zone day: ' + key.slice(5);
     if (key.indexOf('deep:') === 0) return 'Deep clean: ' + key.slice(5);
