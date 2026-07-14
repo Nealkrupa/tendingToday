@@ -136,7 +136,7 @@
   // math, daily cap) stay exactly as they are — this is purely a cosmetic
   // multiplier so on-screen numbers ("+230 XP") read like a game currency
   // instead of literally showing hour counts.
-  const DISPLAY_XP_SCALE = 100;
+  const DISPLAY_XP_SCALE = 1000;
   function xpForHours(hours) { return hours * DISPLAY_XP_SCALE; }
 
   // ---------------------------------------------------------------------
