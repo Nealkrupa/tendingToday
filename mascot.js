@@ -362,6 +362,10 @@
       z-index: 9500;
       font-family: 'Inter', -apple-system, sans-serif;
       pointer-events: none;
+      /* Mobile browsers flash a translucent highlight box over a tapped
+         button by default — noticeable here since the mascot buttons sit
+         on visible ground art rather than blending into a page background. */
+      -webkit-tap-highlight-color: transparent;
     }
     #mascot-widget.mascot-hidden { display: none; }
     #mascot-ground {
@@ -370,10 +374,20 @@
       height: 72px;
       overflow: hidden;
       pointer-events: auto;
+    }
+    /* Both light/dark tiles are mounted (and so already decoded/painted)
+       from the start; switching theme just toggles which one is visible
+       instead of swapping a background-image URL, which otherwise has a
+       brief decode delay the first time that image is actually needed. */
+    .mascot-ground-layer {
+      position: absolute;
+      inset: 0;
       background-repeat: repeat-x;
       background-position: bottom left;
       background-size: auto 100%;
+      display: none;
     }
+    .mascot-ground-layer.mascot-ground-active { display: block; }
     /* Independent of the ground strip — fixed to its own corner rather than
        anchored relative to whichever pet was tapped, so it stays put while
        both pets keep wandering underneath it. */
@@ -408,6 +422,8 @@
       padding: 2px 6px;
       font-family: inherit;
       border-radius: 10px;
+      -webkit-tap-highlight-color: transparent;
+      outline: none;
       /* left is set inline per-pet, driven by the wandering motion state */
     }
     .mascot-slot:hover { background: rgba(255,255,255,0.3); }
@@ -591,27 +607,37 @@
     root.className = 'mascot-hidden';
     root.innerHTML = `
       <div id="mascot-panel"></div>
-      <div id="mascot-ground"></div>
+      <div id="mascot-ground">
+        <div id="mascot-ground-light" class="mascot-ground-layer"></div>
+        <div id="mascot-ground-dark" class="mascot-ground-layer"></div>
+      </div>
     `;
     document.body.appendChild(root);
+    root.querySelector('#mascot-ground-light').style.backgroundImage = "url('" + assetUrl('ground-tile-light-mode.png') + "')";
+    root.querySelector('#mascot-ground-dark').style.backgroundImage = "url('" + assetUrl('ground-tile-dark-mode.png') + "')";
     applyGroundTexture();
     return root;
   }
 
-  // Swaps the ground strip's own art for a light/dark-specific tile rather
-  // than trying to theme one tile with CSS filters — checked on every
-  // render() (cheap: a no-op unless the theme actually changed) rather than
-  // wired to window.onThemeChange, since that's a single global hook other
-  // pages (e.g. home.html) already define for their own dark-mode icon
-  // refresh, and mascot.js claiming it too would silently clobber theirs.
+  // Toggles which of the two already-mounted ground layers is visible,
+  // rather than swapping a shared background-image URL — both tiles are
+  // set once (in ensureDom(), never touched again) so they're already
+  // decoded/painted, meaning a theme switch is an instant display toggle
+  // instead of waiting on a fresh image decode. Checked on every render()
+  // (cheap: a no-op unless the theme actually changed) rather than wired to
+  // window.onThemeChange, since that's a single global hook other pages
+  // (e.g. home.html) already define for their own dark-mode icon refresh,
+  // and mascot.js claiming it too would silently clobber theirs.
   let lastGroundTheme = null;
   function applyGroundTexture() {
-    const ground = document.getElementById('mascot-ground');
-    if (!ground) return;
+    const lightLayer = document.getElementById('mascot-ground-light');
+    const darkLayer = document.getElementById('mascot-ground-dark');
+    if (!lightLayer || !darkLayer) return;
     const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
     if (theme === lastGroundTheme) return;
     lastGroundTheme = theme;
-    ground.style.backgroundImage = "url('" + assetUrl('ground-tile-' + theme + '-mode.png') + "')";
+    lightLayer.classList.toggle('mascot-ground-active', theme === 'light');
+    darkLayer.classList.toggle('mascot-ground-active', theme === 'dark');
   }
 
   function ensureFxLayer() {
