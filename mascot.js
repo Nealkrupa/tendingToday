@@ -76,6 +76,28 @@
   const ASSET_BASE = 'pet-assets/';
   function assetUrl(file) { return ASSET_BASE + file + '?' + ASSET_VERSION; }
 
+  // Every possible sprite layer, up front. render() rebuilds the sprite's
+  // markup (fresh <img> elements) on every idle-frame tick and every live
+  // data update, so if the browser hasn't finished decoding an image yet,
+  // that rebuild briefly paints blank/unstyled before it lands — visible as
+  // a white flash. Preloading all 25 assets the instant this script parses
+  // (same "do it before anything else needs it" idea as theme.js/
+  // priority-alert.js's cached-state paint) means every render from then on
+  // hits an already-decoded image, so the swap is instant.
+  const ALL_ASSET_FILES = []
+    .concat(STAGES.flatMap((s) => [1, 2].map((f) => 'pet-body-' + s.key + '-' + f + '.png')))
+    .concat(SKILLS.flatMap((skill) => ['base', 'trim', 'max-base', 'max-trim'].map((suffix) => 'hat-' + skill + '-' + suffix + '.png')))
+    .concat(['hat-completionist-base.png', 'hat-completionist-trim.png'])
+    .concat(SKILLS.map((skill) => 'prop-' + skill + '.png'));
+
+  function preloadAssets() {
+    ALL_ASSET_FILES.forEach((file) => {
+      const img = new Image();
+      img.src = assetUrl(file);
+    });
+  }
+  preloadAssets();
+
   // ---------------------------------------------------------------------
   // Skill XP curve: RuneScape's formula (flattened: divisor 7 -> 10, i.e.
   // XP requirement doubles every 10 levels instead of 7), then linearly
@@ -459,7 +481,7 @@
     }
     .mascot-pill img { width: 20px; height: 20px; image-rendering: pixelated; }
     .mascot-skill-detail { font-size: 13px; color: var(--ink, #263029); }
-    .mascot-skill-detail .mascot-xp-line { color: var(--muted, #6B7568); font-size: 12px; margin: 4px 0 10px; }
+    .mascot-xp-line { color: var(--muted, #6B7568); font-size: 12px; margin: 4px 0 10px; }
     /* Outlined pill style (background/ink from the shared card+ink tokens,
        border-only accent) rather than a solid accent fill with hardcoded
        white text — matches auth.js's sign-in button, and keeps working
@@ -601,6 +623,7 @@
     myPetKey: null,
     expandedPet: null,      // null | 'userA' | 'userB'
     expandedSkill: null,    // null | skill name (Level 2)
+    customizeOpen: false,   // whether the hat/skin-color pickers are expanded
     frame: 1
   };
 
@@ -648,6 +671,7 @@
       slot.addEventListener('click', () => {
         widgetState.expandedPet = widgetState.expandedPet === key ? null : key;
         widgetState.expandedSkill = null;
+        widgetState.customizeOpen = false;
         render();
       });
       bar.appendChild(slot);
@@ -681,18 +705,29 @@
 
       let ownControlsHtml = '';
       if (isOwn) {
-        const unlocked = unlockedHatsForPet(pet);
-        const equipped = pet.equippedHat || '';
-        const hatButtons = [`<button class="mascot-hat-btn${equipped === '' ? ' mascot-hat-equipped' : ''}" data-hat="">None</button>`]
-          .concat(unlocked.map((h) => `<button class="mascot-hat-btn${equipped === h.id ? ' mascot-hat-equipped' : ''}" data-hat="${h.id}">${hatLabel(h)}</button>`))
-          .join('');
-        const swatchesHtml = SWATCH_COLORS.map((c) => `<div class="mascot-swatch${pet.skinColor === c ? ' mascot-swatch-active' : ''}" data-color="${c}" style="background:${c};"></div>`).join('');
+        const customizeOpen = !!widgetState.customizeOpen;
+        let customizeBody = '';
+        if (customizeOpen) {
+          const unlocked = unlockedHatsForPet(pet);
+          const equipped = pet.equippedHat || '';
+          const hatButtons = [`<button class="mascot-hat-btn${equipped === '' ? ' mascot-hat-equipped' : ''}" data-hat="">None</button>`]
+            .concat(unlocked.map((h) => `<button class="mascot-hat-btn${equipped === h.id ? ' mascot-hat-equipped' : ''}" data-hat="${h.id}">${hatLabel(h)}</button>`))
+            .join('');
+          const swatchesHtml = SWATCH_COLORS.map((c) => `<div class="mascot-swatch${pet.skinColor === c ? ' mascot-swatch-active' : ''}" data-color="${c}" style="background:${c};"></div>`).join('');
+          customizeBody = `
+            <div style="margin-top:8px;">
+              <div class="mascot-xp-line">Hats earned so far — tap to equip:</div>
+              <div class="mascot-hat-list">${hatButtons}</div>
+              <div class="mascot-xp-line" style="margin-top:8px;">Skin color:</div>
+              <div class="mascot-swatch-row">${swatchesHtml}</div>
+            </div>`;
+        }
         ownControlsHtml = `
           <div style="margin-top:10px;">
-            <div class="mascot-xp-line">Hats earned so far — tap to equip:</div>
-            <div class="mascot-hat-list">${hatButtons}</div>
-            <div class="mascot-xp-line" style="margin-top:8px;">Skin color:</div>
-            <div class="mascot-swatch-row">${swatchesHtml}</div>
+            <div class="mascot-pill mascot-customize-toggle" id="mascot-customize-toggle">
+              <span>🎨 Customize${customizeOpen ? ' ▲' : ' ▼'}</span>
+            </div>
+            ${customizeBody}
           </div>`;
       }
 
@@ -704,10 +739,12 @@
         ${ownControlsHtml}
       `;
       document.getElementById('mascot-close-btn').addEventListener('click', () => { widgetState.expandedPet = null; render(); });
-      panel.querySelectorAll('.mascot-pill').forEach((el) => {
+      panel.querySelectorAll('.mascot-pill:not(.mascot-customize-toggle)').forEach((el) => {
         el.addEventListener('click', () => { widgetState.expandedSkill = el.getAttribute('data-skill'); render(); });
       });
       if (isOwn) {
+        const toggle = document.getElementById('mascot-customize-toggle');
+        if (toggle) toggle.addEventListener('click', () => { widgetState.customizeOpen = !widgetState.customizeOpen; render(); });
         panel.querySelectorAll('.mascot-hat-btn').forEach((el) => {
           el.addEventListener('click', () => { setEquippedHat(petKey, el.getAttribute('data-hat') || null); });
         });
@@ -733,7 +770,7 @@
         <button class="mascot-back-btn" id="mascot-back-btn">‹ Back to skills</button>
         <div class="mascot-skill-detail">
           <h4>${SKILL_LABELS[skill]} — Level ${level}</h4>
-          <div class="mascot-xp-line">${xp.toFixed(1)} / 1000 AFK hours banked${nextLevelHours ? ` — ${(nextLevelHours - xp).toFixed(1)} hr to level ${level + 1}` : ' — maxed at level 99'}</div>
+          <div class="mascot-xp-line">${xp.toFixed(1)} hr trained${nextLevelHours ? ` — ${(nextLevelHours - xp).toFixed(1)} hr to level ${level + 1}` : ' — maxed at level 99'}</div>
           ${trainHtml}
         </div>
       `;
