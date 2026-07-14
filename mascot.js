@@ -81,7 +81,7 @@
   // the shared .js files) whenever a pet-assets PNG is replaced in place —
   // browsers otherwise keep serving the old cached bytes indefinitely, since
   // the filename itself never changes.
-  const ASSET_VERSION = 'v=2';
+  const ASSET_VERSION = 'v=3';
   const ASSET_BASE = 'pet-assets/';
   function assetUrl(file) { return ASSET_BASE + file + '?' + ASSET_VERSION; }
 
