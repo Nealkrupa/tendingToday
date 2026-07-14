@@ -331,6 +331,17 @@ write hooks were needed anywhere else on the site.
   widget is opened — progress accrues in the background the same way idle
   games like Melvor or AFK Arena work: you don't have to check in for it to
   happen, you just eventually see the result.
+- **Displayed XP** is a purely cosmetic ×100 scaling of the underlying banked
+  hours (`xpForHours(hours) = hours * 100`) — the level curve, grant math,
+  and daily cap are all still computed in raw hours, only the on-screen
+  number is scaled up so it reads like a game currency. Whenever either
+  pet's XP increases (detected by diffing each live Firestore snapshot
+  against the previous one — same client-side comparison technique the Star
+  Board's milestone banner uses), a "+N XP" popup floats up from that pet's
+  sprite and fades out, as long as the increase is at least 1 (displayed)
+  XP. This fires for both pets symmetrically, from whichever device
+  happens to be open when the sync lands — it's not limited to "my own
+  pet, only when I personally triggered the grant."
 - **Cosmetics** are two independent overlays, not per-life-stage art:
   milestone hats (unlocked permanently at skill levels 25/50/75/90/99, plus
   a "completionist" hat when every skill hits 99) and an active-skill prop

@@ -34,6 +34,11 @@
 
   const SKILLS = ['woodcutting', 'gardening', 'fishing'];
   const SKILL_LABELS = { woodcutting: 'Woodcutting', gardening: 'Gardening', fishing: 'Fishing' };
+  // Skill icon shown in the pill row, the skill detail header, and the XP
+  // popup — emoji instead of the prop PNGs, since those render at whatever
+  // native size each individual tool sprite happens to be, making some
+  // noticeably harder to read at a glance than others at a fixed icon size.
+  const SKILL_EMOJI = { woodcutting: '🪓', gardening: '🪴', fishing: '🐟' };
   const DEFAULT_SKIN_COLORS = { userA: '#8FB4D6', userB: '#E68A8F' };
   const SWATCH_COLORS = ['#8FB4D6', '#E68A8F', '#A6C79A', '#F0C25A', '#BF9FD6', '#8A93A0', '#D98C4A', '#6B8E8E'];
 
@@ -125,6 +130,14 @@
     return lvl;
   }
   function hoursForLevel(level) { return LEVEL_HOURS[Math.max(1, Math.min(99, level))]; }
+
+  // Display-only XP unit, separate from the hours the level curve above is
+  // actually computed in. Banked hours (and the level thresholds, grant
+  // math, daily cap) stay exactly as they are — this is purely a cosmetic
+  // multiplier so on-screen numbers ("+230 XP") read like a game currency
+  // instead of literally showing hour counts.
+  const DISPLAY_XP_SCALE = 100;
+  function xpForHours(hours) { return hours * DISPLAY_XP_SCALE; }
 
   // ---------------------------------------------------------------------
   // Small date/month helpers — same lazy first-writer-wins rollover pattern
@@ -443,6 +456,32 @@
       height: 100px;
       animation: mascot-shimmer-sweep 2.6s ease-in-out infinite;
     }
+
+    /* XP popup — lives in its own fixed overlay layer (#mascot-fx-layer),
+       not inside the sprite box itself, since that box's innerHTML gets
+       rebuilt every idle-frame tick (~650ms) and would kill the animation
+       partway through otherwise. */
+    #mascot-fx-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 9600;
+      pointer-events: none;
+    }
+    .mascot-xp-popup {
+      position: fixed;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--gold, #C08A2E);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+      animation: mascot-xp-float 1.3s ease-out forwards;
+      white-space: nowrap;
+    }
+    @keyframes mascot-xp-float {
+      0%   { transform: translate(-50%, 0); opacity: 0; }
+      15%  { opacity: 1; }
+      100% { transform: translate(-50%, -42px); opacity: 0; }
+    }
     #mascot-panel h4 {
       margin: 0 0 8px 0;
       font-family: 'Fraunces', serif;
@@ -479,7 +518,7 @@
       font-weight: 700;
       color: var(--ink, #263029);
     }
-    .mascot-pill img { width: 20px; height: 20px; image-rendering: pixelated; }
+    .mascot-pill-icon { font-size: 15px; line-height: 1; }
     .mascot-skill-detail { font-size: 13px; color: var(--ink, #263029); }
     .mascot-xp-line { color: var(--muted, #6B7568); font-size: 12px; margin: 4px 0 10px; }
     /* Outlined pill style (background/ink from the shared card+ink tokens,
@@ -543,6 +582,35 @@
     `;
     document.body.appendChild(root);
     return root;
+  }
+
+  function ensureFxLayer() {
+    let el = document.getElementById('mascot-fx-layer');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'mascot-fx-layer';
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  // Floats a "+<emoji><N>" popup upward from whichever pet's sprite just
+  // gained XP in that skill, then removes itself once the CSS animation
+  // finishes. Positioned via getBoundingClientRect against the live sprite
+  // box rather than being a child of it, since the sprite box's own
+  // innerHTML is torn down and rebuilt on every idle-frame tick.
+  function showXpPopup(petKey, skill, xpAmount) {
+    const spriteBox = document.getElementById('mascot-sprite-' + petKey);
+    if (!spriteBox) return;
+    const rect = spriteBox.getBoundingClientRect();
+    const layer = ensureFxLayer();
+    const el = document.createElement('div');
+    el.className = 'mascot-xp-popup';
+    el.textContent = '+' + SKILL_EMOJI[skill] + Math.round(xpAmount).toLocaleString();
+    el.style.left = (rect.left + rect.width / 2) + 'px';
+    el.style.top = rect.top + 'px';
+    layer.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
   }
 
   // ---------------------------------------------------------------------
@@ -624,7 +692,9 @@
     expandedPet: null,      // null | 'userA' | 'userB'
     expandedSkill: null,    // null | skill name (Level 2)
     customizeOpen: false,   // whether the hat/skin-color pickers are expanded
-    frame: 1
+    frame: 1,
+    prevSkillXP: null,      // last-seen { userA: {skill: hours, ...}, userB: {...} }, for XP-popup diffing
+    seededXP: false         // true once prevSkillXP holds a real first snapshot (skips popping on that first one)
   };
 
   function computeDerivedPets() {
@@ -698,7 +768,7 @@
       const pillsHtml = SKILLS.map((skill) => {
         const level = levelForHours(pet.skillXP[skill] || 0);
         return `<div class="mascot-pill" data-skill="${skill}">
-          <img src="${assetUrl('prop-' + skill + '.png')}" />
+          <span class="mascot-pill-icon">${SKILL_EMOJI[skill]}</span>
           <span>${level}</span>
         </div>`;
       }).join('');
@@ -755,9 +825,11 @@
     } else {
       // Level 2: skill detail, own-pet-only "train this skill" control.
       const skill = widgetState.expandedSkill;
-      const xp = pet.skillXP[skill] || 0;
-      const level = levelForHours(xp);
+      const hours = pet.skillXP[skill] || 0;
+      const level = levelForHours(hours);
       const nextLevelHours = level < 99 ? hoursForLevel(level + 1) : null;
+      const currentXP = Math.round(xpForHours(hours));
+      const xpToNext = nextLevelHours !== null ? Math.round(xpForHours(nextLevelHours - hours)) : null;
       const isActive = pet.activeSkill === skill;
 
       let trainHtml = '';
@@ -769,8 +841,8 @@
         <div class="mascot-close-row"><button class="mascot-close-btn" id="mascot-close-btn">✕</button></div>
         <button class="mascot-back-btn" id="mascot-back-btn">‹ Back to skills</button>
         <div class="mascot-skill-detail">
-          <h4>${SKILL_LABELS[skill]} — Level ${level}</h4>
-          <div class="mascot-xp-line">${xp.toFixed(1)} hr trained${nextLevelHours ? ` — ${(nextLevelHours - xp).toFixed(1)} hr to level ${level + 1}` : ' — maxed at level 99'}</div>
+          <h4>${SKILL_EMOJI[skill]} ${SKILL_LABELS[skill]} — Level ${level}</h4>
+          <div class="mascot-xp-line">${currentXP.toLocaleString()} XP${xpToNext !== null ? ` — ${xpToNext.toLocaleString()} XP to level ${level + 1}` : ' — maxed at level 99'}</div>
           ${trainHtml}
         </div>
       `;
@@ -781,6 +853,41 @@
         if (btn) btn.addEventListener('click', () => { setActiveSkill(petKey, skill); });
       }
     }
+  }
+
+  // Diffs incoming skillXP (in hours) against the last-seen snapshot to pop
+  // an XP popup — same "compare consecutive snapshots client-side" pattern
+  // achievements.html already uses for its milestone celebration banner, so
+  // this fires for either pet regardless of which device actually earned
+  // the grant, not just the locally-triggered visit-grant on this page load.
+  function popXpForSnapshotDiff(mascotData) {
+    const pets = mascotData.pets || {};
+    const nextSnapshot = {};
+    PET_KEYS.forEach((petKey) => {
+      const skillXP = (pets[petKey] && pets[petKey].skillXP) || {};
+      nextSnapshot[petKey] = {};
+      SKILLS.forEach((skill) => { nextSnapshot[petKey][skill] = skillXP[skill] || 0; });
+    });
+
+    if (widgetState.seededXP) {
+      const prev = widgetState.prevSkillXP || {};
+      PET_KEYS.forEach((petKey) => {
+        // Popped per-skill (rather than summed across all three) so the
+        // popup can show the right emoji — in practice only the pet's
+        // active skill ever changes at once, but this stays correct even
+        // if that were ever not true.
+        SKILLS.forEach((skill) => {
+          const before = (prev[petKey] && prev[petKey][skill]) || 0;
+          const after = nextSnapshot[petKey][skill];
+          if (after <= before) return;
+          const deltaXP = xpForHours(after - before);
+          if (deltaXP >= 1) showXpPopup(petKey, skill, deltaXP);
+        });
+      });
+    } else {
+      widgetState.seededXP = true;
+    }
+    widgetState.prevSkillXP = nextSnapshot;
   }
 
   function hatLabel(h) {
@@ -802,6 +909,7 @@
       // devices, and life stage updates in real time as anyone completes tasks.
       firebase.firestore().collection('household').doc('mascot-state').onSnapshot((snap) => {
         widgetState.mascotDoc = snap.exists ? snap.data() : {};
+        popXpForSnapshotDiff(widgetState.mascotDoc);
         render();
       }, (e) => console.error('Mascot state subscription failed', e));
 
