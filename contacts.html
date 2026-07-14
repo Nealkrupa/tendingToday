@@ -399,7 +399,7 @@
 <body style="margin:0;">
 <script src="theme.js?v=1"></script>
 <script src="priority-alert.js?v=4"></script>
-<script src="mascot.js?v=16"></script>
+<script src="mascot.js?v=20"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -616,7 +616,8 @@
     }
     html += `</div>`;
 
-    html += `<div class="grace">Tap a phone number to call, or an email to start a message. Synced live across your household \u2014 anyone with this page open sees updates instantly.</div>`;
+    html += `<div class="grace">Tap a phone number to call, or an email to start a message.</div>`;
+    html += `<div style="height:56px;"></div>`;
 
     app.innerHTML = html;
     bindEvents();

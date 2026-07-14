@@ -531,7 +531,7 @@
 <body style="margin:0;">
 <script src="theme.js?v=1"></script>
 <script src="priority-alert.js?v=4"></script>
-<script src="mascot.js?v=16"></script>
+<script src="mascot.js?v=20"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -854,7 +854,8 @@
     }
     html += `</div>`;
 
-    html += `<div class="grace">Check a recipe to add it to this week's plan \u2014 uncheck anytime to remove it. Recipes stay in the book permanently until you delete them, and the weekly plan clears itself at the start of each new week.<br><br>Ingredients reset each week so the list stays honest.<br><br>Synced live across your household \u2014 anyone with this page open sees updates instantly.</div>`;
+    html += `<div class="grace">Check a recipe to add it to this week's plan \u2014 uncheck anytime to remove it. Recipes stay in the book permanently until you delete them, and the weekly plan clears itself at the start of each new week.<br><br>Ingredients reset each week so the list stays honest.</div>`;
+    html += `<div style="height:56px;"></div>`;
 
     app.innerHTML = html;
     bindEvents();

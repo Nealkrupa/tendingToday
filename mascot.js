@@ -373,8 +373,6 @@
       background-repeat: repeat-x;
       background-position: bottom left;
       background-size: auto 100%;
-      border-top: 1px solid var(--line, #DDE3D6);
-      box-shadow: 0 -2px 10px rgba(0,0,0,0.12);
     }
     /* Independent of the ground strip — fixed to its own corner rather than
        anchored relative to whichever pet was tapped, so it stays put while
@@ -769,7 +767,16 @@
   const MAX_STATIONARY_MS = 15000;
   const SPRITE_SIZE = 56;           // matches .mascot-sprite-box's own width/height
 
-  const motionState = {}; // petKey -> { x, fromX, toX, walking, moveStart, moveDuration, stationaryUntil }
+  // petKey -> { x, walking, moveDuration, moveEndsAt, stationaryUntil, facing }.
+  // The glide itself is driven by a real CSS transition on `left` (set once
+  // per move, in render()) rather than by recomputing an interpolated
+  // position every tick — render() already reruns constantly for unrelated
+  // reasons (idle-frame swap, live data updates) at a cadence too coarse to
+  // hand-animate smoothly in JS, so letting the browser's own transition
+  // engine own the motion is what actually makes it smooth. `x` here always
+  // holds the current *target* (mid-glide) or *settled* (stationary) x —
+  // JS never needs to know the exact in-between pixel position.
+  const motionState = {};
 
   function groundWalkableWidth() {
     const ground = document.getElementById('mascot-ground');
@@ -779,51 +786,55 @@
 
   function ensureMotion(petKey) {
     if (motionState[petKey]) return motionState[petKey];
-    const startX = Math.random() * groundWalkableWidth();
     motionState[petKey] = {
-      x: startX, fromX: startX, toX: startX,
-      walking: false, moveStart: 0, moveDuration: 0,
+      x: Math.random() * groundWalkableWidth(),
+      walking: false,
+      moveDuration: 0,
+      moveEndsAt: 0,
+      facing: 'right',
       // Stagger each pet's very first move so both don't set off in sync.
       stationaryUntil: Date.now() + 1000 + Math.random() * 4000
     };
     return motionState[petKey];
   }
 
-  function pickNewTarget(petKey) {
+  // Starts a new glide: picks a target, records direction (for mirroring)
+  // and how long the CSS transition should run, and marks walking=true.
+  // The actual `left`/`transition` CSS gets applied once by render(),
+  // right when this returns — not touched again until the glide finishes.
+  function startNewMove(petKey) {
     const m = ensureMotion(petKey);
     const maxX = groundWalkableWidth();
     let target = Math.random() * maxX;
     // Avoid picking a spot barely different from the current one, so every
     // move actually reads as "went somewhere" rather than a tiny shuffle.
     if (maxX > 0 && Math.abs(target - m.x) < maxX * 0.2) target = maxX - target;
-    m.fromX = m.x;
-    m.toX = Math.max(0, Math.min(maxX, target));
-    m.moveStart = Date.now();
-    const dist = Math.abs(m.toX - m.fromX);
+    target = Math.max(0, Math.min(maxX, target));
+    const dist = Math.abs(target - m.x);
+    m.facing = target >= m.x ? 'right' : 'left';
     m.moveDuration = Math.max(MIN_MOVE_MS, (dist / WALK_SPEED_PX_PER_SEC) * 1000);
+    m.moveEndsAt = Date.now() + m.moveDuration;
+    m.x = target;
     m.walking = true;
   }
 
-  // Advances one pet's motion to "now" and returns its current state
-  // (current x plus whether it's actively walking, which gates the
-  // tool-working animation off while in transit).
+  // Advances one pet's motion state and reports whether a *new* glide just
+  // started this call (so render() knows to (re)apply the CSS transition),
+  // plus the target x and facing direction to render with either way.
   function tickMotion(petKey) {
     const m = ensureMotion(petKey);
     const now = Date.now();
+    let justStarted = false;
     if (m.walking) {
-      const progress = Math.min(1, (now - m.moveStart) / m.moveDuration);
-      // easeInOutQuad — gentle start/stop rather than a linear slide.
-      const eased = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-      m.x = m.fromX + (m.toX - m.fromX) * eased;
-      if (progress >= 1) {
+      if (now >= m.moveEndsAt) {
         m.walking = false;
-        m.x = m.toX;
         m.stationaryUntil = now + MIN_STATIONARY_MS + Math.random() * (MAX_STATIONARY_MS - MIN_STATIONARY_MS);
       }
     } else if (now >= m.stationaryUntil) {
-      pickNewTarget(petKey);
+      startNewMove(petKey);
+      justStarted = true;
     }
-    return m;
+    return { x: m.x, walking: m.walking, moveDuration: m.moveDuration, facing: m.facing, justStarted };
   }
 
   function renderSprite(container, pet, frame, bankedHours, isWalking) {
@@ -937,23 +948,46 @@
 
     const { pets } = computeDerivedPets();
     const ground = document.getElementById('mascot-ground');
-    ground.innerHTML = '';
+    // Slots are created once and reused across renders (not torn down every
+    // idle-frame tick like the sprite contents still are) — repositioning
+    // relies on a real CSS transition on `left`, which only animates
+    // smoothly between an existing element's old and new value. A freshly
+    // recreated element has no "old value" to transition from, so it would
+    // just snap instead of gliding.
     PET_KEYS.forEach((key) => {
       const pet = pets[key];
       const motion = tickMotion(key);
-      const slot = document.createElement('button');
-      slot.className = 'mascot-slot';
-      slot.type = 'button';
-      slot.style.left = motion.x + 'px';
-      slot.innerHTML = `<div class="mascot-sprite-box" id="mascot-sprite-${key}"></div><span class="mascot-slot-name">${labelForPet(key)}</span>`;
-      slot.addEventListener('click', () => {
-        widgetState.expandedPet = widgetState.expandedPet === key ? null : key;
-        widgetState.expandedSkill = null;
-        widgetState.customizeOpen = false;
-        render();
-      });
-      ground.appendChild(slot);
-      renderSprite(slot.querySelector('.mascot-sprite-box'), pet, widgetState.frame, pet.__bankedHours, motion.walking);
+      let slot = document.getElementById('mascot-slot-' + key);
+      if (!slot) {
+        slot = document.createElement('button');
+        slot.id = 'mascot-slot-' + key;
+        slot.className = 'mascot-slot';
+        slot.type = 'button';
+        slot.style.left = motion.x + 'px';
+        slot.innerHTML = `<div class="mascot-sprite-box" id="mascot-sprite-${key}"></div><span class="mascot-slot-name">${labelForPet(key)}</span>`;
+        slot.addEventListener('click', () => {
+          widgetState.expandedPet = widgetState.expandedPet === key ? null : key;
+          widgetState.expandedSkill = null;
+          widgetState.customizeOpen = false;
+          render();
+        });
+        ground.appendChild(slot);
+      }
+      // Only (re)apply the transition + target when a new glide actually
+      // started this tick — touching `left` again mid-glide with the same
+      // value is harmless, but setting `transition` again would restart it.
+      if (motion.justStarted) {
+        slot.style.transition = 'left ' + (motion.moveDuration / 1000) + 's ease-in-out';
+        slot.style.left = motion.x + 'px';
+      }
+      const spriteBox = slot.querySelector('.mascot-sprite-box');
+      // Mirrors the whole layered sprite (hat+body+prop together) so
+      // attachment points stay correctly aligned post-flip, rather than
+      // just flipping the body and leaving the hat/prop in their
+      // original-facing spots. Source art faces left by default, so it's
+      // moving *right* that needs the flip, not left.
+      spriteBox.style.transform = motion.facing === 'right' ? 'scaleX(-1)' : 'scaleX(1)';
+      renderSprite(spriteBox, pet, widgetState.frame, pet.__bankedHours, motion.walking);
     });
 
     renderPanel(pets);
