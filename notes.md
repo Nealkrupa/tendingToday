@@ -675,14 +675,22 @@ by name.
 
 **Subs & Bills** (`subscriptions.html`) — two independent flat lists,
 **Subscriptions** (shown first) and **Bills**, same fields on both: name,
-cost, billing cycle (monthly/yearly), renewal date, optional category,
-optional notes, and a "Mark for cancellation" checkbox. Each section sorts by
-soonest renewal date and shows a running cost line split by cycle rather
-than blended into one number — "3 subscriptions for $45 a month, $120 a
-year" — since a monthly total and a yearly total answer different budgeting
-questions and collapsing them would hide one or the other. `renewalDate`
-always holds the *next* upcoming due date: any date that's fallen into the
-past gets rolled forward one cycle at a time on page load (handles a
+cost, a billing cadence, renewal date, optional category, optional notes,
+and a "Mark for cancellation" checkbox. The cadence is a custom interval —
+`cycleUnit` (week/month/year) + `cycleInterval` (any positive integer) — not
+a fixed monthly/yearly toggle, so "every 3 months" or "every 5 weeks" is
+just `{cycleUnit: 'month', cycleInterval: 3}` / `{cycleUnit: 'week',
+cycleInterval: 5}`. Older data saved before this existed (a fixed
+`cycle: 'monthly'|'yearly'` field) is migrated in place on load — mapped to
+`cycleInterval: 1` in the matching unit, then the old field deleted.
+Each section sorts by soonest renewal date and shows one true cost total
+expressed in both units — "3 subscriptions for $45 a month, $540 a year" —
+rather than separate per-cycle sums, so a mix of weekly/monthly/yearly items
+still collapses into a single comparable figure; every cadence is converted
+through `occurrencesPerYear(unit, interval)` (e.g. every 3 months = 4/year,
+every 5 weeks ≈ 10.4/year) to get there. `renewalDate` always holds the
+*next* upcoming due date: any date that's fallen into the past gets rolled
+forward one cadence-interval at a time on page load (handles a
 long-untouched app catching up several cycles at once), the same lazy-reset
 pattern Tending Today's weekly reset and the mascot's monthly baseline
 already use — there's no manual "mark as paid/renewed" step. Checking "Mark
