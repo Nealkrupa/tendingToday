@@ -455,6 +455,36 @@
   }
   .recipe-details-input::placeholder { color: var(--muted); opacity: 0.75; }
 
+  /* Ingredient rows: same shared .task-row, but taller now that each one can
+     carry a category tag + an optional comment, so the row's own items align
+     to the top rather than centering against that extra height. */
+  .ingredient-row { align-items: flex-start; }
+  .ingredient-main { flex: 1; min-width: 0; }
+  .ingredient-top-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Category tag — same small uppercase pill treatment as Contacts'
+     .contact-tag-input, recolored to this page's blue accent. */
+  .ingredient-tag-input {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--blue);
+    background: var(--blue-bg);
+    border: none;
+    padding: 3px 8px;
+    border-radius: 999px;
+    outline: none;
+    width: 110px;
+    min-width: 0;
+  }
+  .ingredient-tag-input::placeholder { color: var(--blue); opacity: 0.55; }
+
   /* Meals-for-the-week rows */
   .meal-plan-row .task-label a {
     color: var(--ink);
@@ -528,7 +558,7 @@
 
   const defaultState = {
     weekKey: wk,
-    ingredients: [],   // { id, text }
+    ingredients: [],   // { id, text, category, comment }
     recipes: []        // { id, title, url, selected }
   };
 
@@ -557,6 +587,10 @@
     let s = raw ? JSON.parse(JSON.stringify(raw)) : structuredClone(defaultState);
     let changed = false;
     if (!Array.isArray(s.ingredients)) { s.ingredients = []; changed = true; }
+    s.ingredients.forEach(it => {
+      if (typeof it.category !== 'string') { it.category = ''; changed = true; }
+      if (typeof it.comment !== 'string') { it.comment = ''; changed = true; }
+    });
     if (!Array.isArray(s.recipes)) {
       // Migrate any older mealIdeas / recipeLinks data into the unified recipe book.
       const migrated = [];
@@ -762,8 +796,14 @@
       html += `<div class="empty-state">Nothing listed yet \u2014 add what's in the fridge and pantry.</div>`;
     } else {
       state.ingredients.forEach(it => {
-        html += `<div class="task-row" data-id="${it.id}">
-          <div class="task-label" style="cursor:default;">${escapeHtml(it.text)}</div>
+        html += `<div class="task-row ingredient-row" data-id="${it.id}">
+          <div class="ingredient-main">
+            <div class="ingredient-top-row">
+              <div class="task-label" style="cursor:default;">${escapeHtml(it.text)}</div>
+              <input type="text" class="ingredient-tag-input" value="${escapeAttr(it.category)}" placeholder="Category" data-edit-ing-category="${it.id}">
+            </div>
+            <textarea class="recipe-details-input" rows="1" placeholder="Add a note (optional)" data-edit-ing-comment="${it.id}">${escapeHtml(it.comment)}</textarea>
+          </div>
           <button class="remove-btn" data-remove-ing="${it.id}" aria-label="Remove ingredient">\u00d7</button>
         </div>`;
       });
@@ -841,7 +881,7 @@
     async function addIngredient() {
       const text = ingInput.value.trim();
       if (!text) return;
-      state.ingredients.push({ id: makeId('g'), text });
+      state.ingredients.push({ id: makeId('g'), text, category: '', comment: '' });
       ingInput.value = '';
       await save();
       render();
@@ -856,6 +896,30 @@
         const id = el.getAttribute('data-remove-ing');
         state.ingredients = state.ingredients.filter(i => i.id !== id);
         await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-edit-ing-category]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const id = el.getAttribute('data-edit-ing-category');
+        const it = state.ingredients.find(i => i.id === id);
+        if (it) {
+          it.category = el.value.trim();
+          await save();
+        }
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-edit-ing-comment]').forEach(el => {
+      el.addEventListener('change', async () => {
+        const id = el.getAttribute('data-edit-ing-comment');
+        const it = state.ingredients.find(i => i.id === id);
+        if (it) {
+          it.comment = el.value.trim();
+          await save();
+        }
         render();
       });
     });

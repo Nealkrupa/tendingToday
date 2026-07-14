@@ -529,7 +529,13 @@ automatically at the start of each new week, not each section individually.
 
 **Meal Planning** — two independent stores:
 - *Ingredients on hand* (`state.ingredients`) clears itself automatically at
-  the start of each new week (same week-key logic as Tending Today).
+  the start of each new week (same week-key logic as Tending Today). Each
+  ingredient can optionally carry a **category tag** (small inline-editable
+  pill, same treatment as Contacts' category tag) and a **comment** (same
+  dashed-top-border textarea style used for recipe notes) — both are set
+  after adding, not part of the quick add form, and both clear along with
+  the ingredient itself at the weekly reset since they live on the same
+  object.
 - *Recipe book* (`state.recipes`) is permanent — recipes accumulate
   indefinitely until manually deleted. Each entry has a title, an optional
   link, optional details/notes, and who added it. If a page is still running
