@@ -16,7 +16,7 @@ Put all of these in the same folder on your site:
 | `grocery-list.html` | Shared running grocery list |
 | `notes.html` | Household notes / corkboard |
 | `meal-planning.html` | Weekly ingredients on hand, plus a permanent recipe book with a "this week's plan" toggle |
-| `wishlist.html` | Gift wishlists, one section each for Nat and Neal |
+| `wishlist.html` | Gift wishlists, one section each for the two household members |
 | `house-projects.html` | Home improvement projects with checklists, budgets & material costs |
 | `contacts.html` | Address book with tap-to-call / tap-to-email |
 | `achievements.html` | Star Board — ever-growing gold star sticker board of completions |
@@ -37,10 +37,7 @@ at the top of every other page.
 ## Google Sign-In (access control)
 
 Every page is now gated behind Google Sign-In, restricted to a specific list of
-email addresses — currently:
-
-- `nealkrupa@gmail.com`
-- `natjkrupa@gmail.com`
+email addresses — currently two household members' accounts.
 
 That allowlist lives in **`auth.js`**, in the `ALLOWED_EMAILS` array near the
 top of the file. To add or remove someone, edit that array — no other file
@@ -62,8 +59,8 @@ needs to change.
    match /household/{document=**} {
      allow read, write: if request.auth != null
        && request.auth.token.email in [
-         'nealkrupa@gmail.com',
-         'natjkrupa@gmail.com'
+         '<email 1>',
+         '<email 2>'
        ];
    }
    ```
@@ -185,10 +182,10 @@ delay so a cluster of 2–4 stars doesn't glint in unison.
 date — and never overwritten, even if the task is later unchecked and
 re-checked. A trophy badge for each crossed threshold sits under that
 sticker forever, showing the full detail directly on the badge itself (e.g.
-"🏆 First to 1,000 — Nat, Jul 10") rather than hidden behind a hover tooltip,
+"🏆 First to 1,000 — [name], [date]") rather than hidden behind a hover tooltip,
 so it's just as visible on mobile as on desktop. When a milestone is crossed live, everyone who currently
 has the achievements page open sees a one-time celebration banner slide in
-from the top ("First to 1,000! — Made the bed — Nat, Jul 10"), auto-dismissing
+from the top ("First to 1,000! — Made the bed — [name], [date]"), auto-dismissing
 after a few seconds (or tap to dismiss early). This is powered by comparing
 each Firestore snapshot against the previous one client-side — only newly
 appearing milestone entries trigger a banner, so reloading the page or
@@ -355,15 +352,15 @@ first script tag on the page.
 
 Grocery items, notes, wishlist entries, recipes, and House Projects
 (both the project itself and each task) now show a small tag noting who
-added them — e.g. "— Nat" or "Added by Neal" — using whoever is currently
+added them — e.g. "— [name]" or "Added by [name]" — using whoever is currently
 signed in.
 
 This is powered by two things working together:
 
 - **`auth.js`** exposes `window.getHouseholdUserLabel()`, which maps the
   signed-in account's email to a short display name via the `EMAIL_LABELS`
-  map near the top of the file (currently `nealkrupa@gmail.com` → "Neal",
-  `natjkrupa@gmail.com` → "Nat"). If an email isn't in that map, it falls
+  map near the top of the file (mapping each household member's email to
+  their first name). If an email isn't in that map, it falls
   back to the Google account's first name, or the raw email as a last resort.
   Keep this map in sync with `ALLOWED_EMAILS` if you ever add a third person.
 - Each page's "add" function calls `window.getHouseholdUserLabel()` at the
@@ -449,10 +446,10 @@ corkboard. Resolved notes sink down and can be bulk-cleared.
   same way ingredients do at the start of a new week.
 - A search box filters the recipe book by title, details, or link.
 
-**Wishlist** — two independent sections, one per person, each with its own
-add form (name + optional link). Deliberately has **no "purchased" checkbox** —
-since everyone views the same synced page, marking something bought would spoil
-the surprise for the person whose list it is.
+**Wishlist** — two independent sections, one per household member, each with
+its own add form (name + optional link). Deliberately has **no "purchased"
+checkbox** — since everyone views the same synced page, marking something
+bought would spoil the surprise for the person whose list it is.
 
 **House Projects** — create any number of projects. Each has an editable
 title, a task checklist with a progress bar, an optional budget, and a
