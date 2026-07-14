@@ -385,9 +385,14 @@
       background-repeat: repeat-x;
       background-position: bottom left;
       background-size: auto 100%;
-      display: none;
+      /* opacity, not display:none — a display:none element isn't painted
+         at all, so browsers defer decoding its background-image until it
+         actually becomes visible, which reintroduces the exact decode
+         delay this two-layer approach exists to avoid. Opacity 0 still
+         gets rendered/decoded immediately, just invisible. */
+      opacity: 0;
     }
-    .mascot-ground-layer.mascot-ground-active { display: block; }
+    .mascot-ground-layer.mascot-ground-active { opacity: 1; }
     /* Independent of the ground strip — fixed to its own corner rather than
        anchored relative to whichever pet was tapped, so it stays put while
        both pets keep wandering underneath it. */
@@ -426,7 +431,10 @@
       outline: none;
       /* left is set inline per-pet, driven by the wandering motion state */
     }
-    .mascot-slot:hover { background: rgba(255,255,255,0.3); }
+    /* No :hover background — touch browsers frequently apply :hover styles
+       on tap and leave them "stuck" until a tap elsewhere, which is exactly
+       the rectangle-flash effect being removed here, on both desktop and
+       mobile. */
     .mascot-slot-name {
       font-size: 10px;
       font-weight: 700;
