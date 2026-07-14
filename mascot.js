@@ -295,28 +295,31 @@
   // ---------------------------------------------------------------------
   const style = document.createElement('style');
   style.textContent = `
+    /* Anchored to the bottom-right corner (not a full-width bar) so it never
+       sits on top of centered bottom-of-page controls like home.html's dark
+       mode toggle. The panel opens upward from the same corner. */
     #mascot-widget {
       position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      right: 16px;
+      bottom: 16px;
+      left: auto;
       z-index: 9500;
       display: flex;
       flex-direction: column;
-      align-items: stretch;
+      align-items: flex-end;
       font-family: 'Inter', -apple-system, sans-serif;
       pointer-events: none;
     }
     #mascot-widget.mascot-hidden { display: none; }
     #mascot-panel {
       pointer-events: auto;
-      margin: 0 auto 4px auto;
-      max-width: 360px;
-      width: calc(100% - 24px);
+      margin: 0 0 10px 0;
+      width: 300px;
+      max-width: calc(100vw - 32px);
       background: var(--card, #FFFFFF);
       border: 1px solid var(--line, #DDE3D6);
       border-radius: 14px;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.28);
       padding: 12px 14px;
       display: none;
       max-height: 46vh;
@@ -327,12 +330,13 @@
     #mascot-bar {
       pointer-events: auto;
       display: flex;
-      justify-content: center;
-      gap: 18px;
+      justify-content: flex-end;
+      gap: 10px;
       background: var(--card, #FFFFFF);
-      border-top: 1px solid var(--line, #DDE3D6);
-      padding: 8px 14px;
-      box-shadow: 0 -2px 10px rgba(0,0,0,0.08);
+      border: 1px solid var(--line, #DDE3D6);
+      border-radius: 999px;
+      padding: 6px 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
     }
     .mascot-slot {
       display: flex;
@@ -344,7 +348,9 @@
       border: none;
       padding: 2px 6px;
       font-family: inherit;
+      border-radius: 10px;
     }
+    .mascot-slot:hover { background: var(--bg, #EEF1EA); }
     .mascot-slot-name {
       font-size: 10px;
       font-weight: 700;
@@ -440,18 +446,36 @@
     .mascot-pill img { width: 20px; height: 20px; image-rendering: pixelated; }
     .mascot-skill-detail { font-size: 13px; color: var(--ink, #263029); }
     .mascot-skill-detail .mascot-xp-line { color: var(--muted, #6B7568); font-size: 12px; margin: 4px 0 10px; }
+    /* Outlined pill style (background/ink from the shared card+ink tokens,
+       border-only accent) rather than a solid accent fill with hardcoded
+       white text — matches auth.js's sign-in button, and keeps working
+       contrast in dark mode where --sage becomes a pale, low-contrast tone
+       that reads poorly under white text. */
     .mascot-train-btn, .mascot-hat-btn {
-      background: var(--sage, #7C9075);
-      color: #FFFFFF;
-      border: none;
+      background: var(--card, #FFFFFF);
+      color: var(--ink, #263029);
+      border: 1.5px solid var(--sage, #7C9075);
       border-radius: 8px;
-      padding: 7px 12px;
+      padding: 6px 12px;
       font-size: 12px;
       font-weight: 700;
+      font-family: inherit;
       cursor: pointer;
       margin: 3px 4px 3px 0;
+      transition: border-color 0.15s ease;
     }
-    .mascot-train-btn[disabled] { opacity: 0.5; cursor: default; }
+    .mascot-train-btn:hover, .mascot-hat-btn:hover { border-color: var(--ink, #263029); }
+    .mascot-train-btn[disabled] {
+      opacity: 0.6;
+      cursor: default;
+      border-color: var(--line, #DDE3D6);
+      color: var(--muted, #6B7568);
+    }
+    .mascot-hat-btn.mascot-hat-equipped {
+      background: var(--sage, #7C9075);
+      color: var(--card, #FFFFFF);
+      border-color: var(--sage, #7C9075);
+    }
     .mascot-hat-list { display: flex; flex-wrap: wrap; margin-top: 6px; }
     .mascot-swatch-row { display: flex; gap: 6px; margin-top: 8px; }
     .mascot-swatch {
@@ -463,6 +487,7 @@
     .mascot-back-btn {
       background: none; border: none; color: var(--muted, #6B7568);
       font-size: 12px; cursor: pointer; padding: 0 0 8px 0;
+      font-family: inherit;
     }
   `;
   document.head.appendChild(style);
@@ -643,8 +668,9 @@
       let ownControlsHtml = '';
       if (isOwn) {
         const unlocked = unlockedHatsForPet(pet);
-        const hatButtons = [`<button class="mascot-hat-btn" data-hat="">None</button>`]
-          .concat(unlocked.map((h) => `<button class="mascot-hat-btn" data-hat="${h.id}">${hatLabel(h)}</button>`))
+        const equipped = pet.equippedHat || '';
+        const hatButtons = [`<button class="mascot-hat-btn${equipped === '' ? ' mascot-hat-equipped' : ''}" data-hat="">None</button>`]
+          .concat(unlocked.map((h) => `<button class="mascot-hat-btn${equipped === h.id ? ' mascot-hat-equipped' : ''}" data-hat="${h.id}">${hatLabel(h)}</button>`))
           .join('');
         const swatchesHtml = SWATCH_COLORS.map((c) => `<div class="mascot-swatch${pet.skinColor === c ? ' mascot-swatch-active' : ''}" data-color="${c}" style="background:${c};"></div>`).join('');
         ownControlsHtml = `
