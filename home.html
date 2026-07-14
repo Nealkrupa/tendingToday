@@ -28,6 +28,8 @@
     --gold-bg: #FBF1DE;
     --sage: #7C9075;
     --sage-bg: #E4EBDF;
+    --slate: #5C6E78;
+    --slate-bg: #DCE4E6;
   }
 
   * { box-sizing: border-box; }
@@ -121,6 +123,7 @@
   .link-card.wishlist { background: #E5DCEE; }
   .link-card.projects { background: #EEDCC8; }
   .link-card.contacts { background: #CFE7E0; }
+  .link-card.subscriptions { background: var(--slate-bg); }
   .link-card.stars { background: #F4E4B4; }
 
   .icon-wrap {
@@ -147,6 +150,7 @@
   .link-card.wishlist .eyebrow { color: #6D5589; }
   .link-card.projects .eyebrow { color: #8A4E2E; }
   .link-card.contacts .eyebrow { color: #2E6459; }
+  .link-card.subscriptions .eyebrow { color: #3E4C54; }
   .link-card.stars .eyebrow { color: #7A5A10; }
 
   .link-text h2 {
@@ -236,17 +240,21 @@
     --gold-bg: #3A2E17;
     --sage: #9DBB92;
     --sage-bg: #29332A;
+    --slate: #93A7B0;
+    --slate-bg: #29343A;
   }
   html[data-theme="dark"] .link-card.meals { background: #223541; }
   html[data-theme="dark"] .link-card.wishlist { background: #332740; }
   html[data-theme="dark"] .link-card.projects { background: #3A2C1E; }
   html[data-theme="dark"] .link-card.contacts { background: #1F3833; }
+  html[data-theme="dark"] .link-card.subscriptions { background: #29343A; }
   html[data-theme="dark"] .link-card.stars { background: #3D3012; }
 </style>
 </head>
 <body style="margin:0;">
 <script src="theme.js?v=1"></script>
 <script src="priority-alert.js?v=4"></script>
+<script src="cancel-alert.js?v=1"></script>
 <script src="mascot.js?v=30"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -403,6 +411,21 @@
     </svg>`;
   }
 
+  function billsIcon() {
+    return `<svg viewBox="0 0 56 56" width="40" height="40">
+      <g>
+        <rect x="9" y="24" width="30" height="17" rx="2.5" fill="#FFFFFF" stroke="#5C6E78" stroke-width="2"/>
+        <rect x="13" y="29" width="20" height="2" fill="#5C6E78" opacity="0.55"/>
+        <rect x="13" y="34" width="12" height="2" fill="#5C6E78" opacity="0.55"/>
+      </g>
+      <g>
+        <rect x="17" y="12" width="30" height="17" rx="2.5" fill="#FFFFFF" stroke="#7C9075" stroke-width="2"/>
+        <rect x="21" y="17" width="20" height="2" fill="#7C9075" opacity="0.55"/>
+        <rect x="21" y="22" width="12" height="2" fill="#7C9075" opacity="0.55"/>
+      </g>
+    </svg>`;
+  }
+
   function starBtnIcon() {
     return `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 1.6 L9.9 5.7 L14.4 6.2 L11 9.3 L11.9 13.8 L8 11.5 L4.1 13.8 L5 9.3 L1.6 6.2 L6.1 5.7 Z" fill="#E8B33C" stroke="#C08A2E" stroke-width="1" stroke-linejoin="round"/></svg>`;
   }
@@ -444,6 +467,11 @@
       key: 'contacts', href: 'contacts.html', cls: 'contacts', icon: bookIcon(),
       eyebrow: 'Who To Call', title: 'Contacts',
       desc: 'Plumber, vet, landlord &amp; everyone else, one tap away'
+    },
+    {
+      key: 'subscriptions', href: 'subscriptions.html', cls: 'subscriptions', icon: billsIcon(),
+      eyebrow: 'Recurring Costs', title: 'Subs &amp; Bills',
+      desc: 'Renewal dates, monthly/yearly costs &amp; cancel reminders'
     }
   ];
 
@@ -519,6 +547,7 @@
   requireHouseholdAuth(function () {
     initTheme();
     initPriorityAlertBanner();
+    initCancelAlertBanner();
     initMascotWidget();
     renderHub();
   });

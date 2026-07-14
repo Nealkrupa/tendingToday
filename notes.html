@@ -25,7 +25,7 @@
     --rose: #B4636F;
     --rose-bg: #F0D3D7;
     --gold: #C08A2E;
-    --gold-bg: #F5E4BE;
+    --gold-bg: #FBF1DE;
     --sage: #7C9075;
     --sage-bg: #E4EBDF;
   }
@@ -442,6 +442,7 @@
 <body style="margin:0;">
 <script src="theme.js?v=1"></script>
 <script src="priority-alert.js?v=4"></script>
+<script src="cancel-alert.js?v=1"></script>
 <script src="mascot.js?v=30"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -913,6 +914,7 @@
     trackPageVisit('notes');
     initTheme();
     initPriorityAlertBanner();
+    initCancelAlertBanner();
     initMascotWidget();
     if (window.subscribeAchievementCounts) {
       window.subscribeAchievementCounts(function (counts) {

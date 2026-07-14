@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subscriptions</title>
+<link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="shortcut icon" href="/favicon.ico" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-title" content="TendingToday" />
+<link rel="manifest" href="/site.webmanifest" />
+<meta name="theme-color" content="#E2E8EA" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
+
+  :root{
+    --bg: #E2E8EA;
+    --card: #FFFFFF;
+    --ink: #263029;
+    --muted: #6B7568;
+    --line: #CBD8DB;
+    --rose: #B4636F;
+    --rose-bg: #F6E8EA;
+    --gold: #C08A2E;
+    --gold-bg: #FBF1DE;
+    --sage: #7C9075;
+    --sage-bg: #E4EBDF;
+    --slate: #5C6E78;
+    --slate-bg: #DCE4E6;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+  }
+
+  #app {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 0 48px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .header-icons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .home-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.1);
+    text-decoration: none;
+    color: var(--ink);
+    flex-shrink: 0;
+    transition: transform 0.12s ease;
+  }
+  .home-btn:active { transform: scale(0.92); }
+
+  .header {
+    padding: 28px 20px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .header-text h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 24px;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.01em;
+  }
+
+  .header-text .date {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .bills-wrap {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+  }
+
+  .icon-progress {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .progress-count {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--slate);
+    background: var(--slate-bg);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+    position: relative;
+    overflow: hidden;
+  }
+
+  @keyframes countPop {
+    0% { transform: scale(1); }
+    45% { transform: scale(1.28); }
+    100% { transform: scale(1); }
+  }
+
+  .progress-count.count-pop {
+    animation: countPop 0.45s ease;
+  }
+
+  .progress-count.shimmer-t1::after,
+  .progress-count.shimmer-t2::after,
+  .progress-count.shimmer-t3::after,
+  .progress-count.shimmer-prestige::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -60%;
+    width: 45%;
+    height: 100%;
+    background: linear-gradient(120deg, transparent, var(--badge-shimmer, rgba(255,255,255,0.95)), transparent);
+    animation: badgeShimmer 3.4s ease-in-out infinite;
+    opacity: var(--badge-opacity, 0.05);
+  }
+
+  .progress-count.shimmer-t2::after {
+    animation-duration: 2.8s;
+  }
+
+  .progress-count.shimmer-t2 {
+    box-shadow: 0 0 5px 0 var(--slate-bg);
+  }
+
+  .progress-count.shimmer-t3::after {
+    animation-duration: 2.2s;
+  }
+
+  .progress-count.shimmer-t3 {
+    font-weight: 700;
+    box-shadow: 0 0 8px 1px var(--slate-bg);
+  }
+
+  .progress-count.shimmer-prestige {
+    font-weight: 700;
+    color: var(--badge-edge, var(--slate));
+    box-shadow: 0 0 10px 2px var(--badge-edge, var(--slate-bg));
+  }
+
+  .progress-count.shimmer-prestige::after {
+    animation-duration: 1.7s;
+  }
+
+  @keyframes badgeShimmer {
+    0% { left: -60%; }
+    55% { left: 130%; }
+    100% { left: 130%; }
+  }
+
+  .section {
+    margin: 0 16px 16px 16px;
+    background: var(--card);
+    border-radius: 18px;
+    padding: 18px 18px 14px;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.06);
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 6px 0;
+  }
+
+  .section h2 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 18px;
+    margin: 0 0 4px 0;
+  }
+
+  .cost-summary {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 0 12px 0;
+  }
+
+  .add-input {
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    padding: 11px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+    margin-bottom: 8px;
+  }
+  .add-input:focus { border-color: var(--slate); }
+
+  .add-row-split {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .add-row-split .add-input { margin-bottom: 0; flex: 1; min-width: 0; }
+
+  .add-btn-wide {
+    width: 100%;
+    margin-top: 2px;
+    border-radius: 12px;
+    border: none;
+    background: var(--slate);
+    color: white;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 11px 14px;
+    cursor: pointer;
+    transition: transform 0.12s ease;
+  }
+  .add-btn-wide:active { transform: scale(0.98); }
+
+  .item-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 13px 2px;
+    border-bottom: 1px solid var(--line);
+  }
+  .item-row:last-child { border-bottom: none; }
+
+  .item-main { flex: 1; min-width: 0; }
+
+  .item-name-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .item-name-input {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 16px;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    outline: none;
+    padding: 2px 0;
+    flex: 1;
+    min-width: 90px;
+  }
+
+  .item-tag-input {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--slate);
+    background: var(--slate-bg);
+    border: none;
+    padding: 3px 8px;
+    border-radius: 999px;
+    outline: none;
+    width: 100px;
+    min-width: 0;
+    flex-shrink: 0;
+  }
+  .item-tag-input::placeholder { color: var(--slate); opacity: 0.55; }
+
+  .item-field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }
+  .item-cost-input {
+    width: 64px;
+    font-size: 13.5px;
+    color: var(--ink);
+    border: none;
+    border-bottom: 1px dashed var(--line);
+    background: transparent;
+    outline: none;
+    padding: 3px 0;
+  }
+  .item-cost-input:focus { border-bottom-color: var(--slate); }
+  .item-cycle-select {
+    font-size: 12.5px;
+    color: var(--muted);
+    border: none;
+    border-bottom: 1px dashed var(--line);
+    background: transparent;
+    outline: none;
+    padding: 3px 0;
+  }
+  .item-date-input {
+    font-size: 12.5px;
+    color: var(--muted);
+    border: none;
+    border-bottom: 1px dashed var(--line);
+    background: transparent;
+    outline: none;
+    padding: 3px 0;
+    min-width: 0;
+  }
+  .item-date-input:focus, .item-cycle-select:focus { border-bottom-color: var(--slate); }
+
+  .due-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .due-label.due-soon { color: var(--rose); font-weight: 600; }
+
+  .item-notes-input {
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--ink);
+    border: none;
+    background: transparent;
+    outline: none;
+    padding: 5px 0 0 0;
+    margin-top: 6px;
+    border-top: 1px dashed var(--line);
+    resize: none;
+    overflow: hidden;
+    display: block;
+  }
+  .item-notes-input::placeholder { color: var(--muted); opacity: 0.7; }
+
+  .cancel-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 8px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .cancel-checkbox {
+    width: 18px;
+    height: 18px;
+    border-radius: 6px;
+    border: 2px solid var(--muted);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.18s ease;
+    background: transparent;
+  }
+  .cancel-checkbox svg { opacity: 0; transform: scale(0.5); transition: all 0.18s ease; }
+  .cancel-checkbox.checked { background: var(--rose); border-color: var(--rose); }
+  .cancel-checkbox.checked svg { opacity: 1; transform: scale(1); }
+  .cancel-label {
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .cancel-row.checked .cancel-label { color: var(--rose); font-weight: 600; }
+
+  .added-by {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    opacity: 0.7;
+    margin-top: 6px;
+  }
+
+  .remove-btn {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.5;
+    transition: opacity 0.15s ease, background 0.15s ease;
+    margin-top: 2px;
+  }
+  .remove-btn:hover { opacity: 1; background: var(--rose-bg); color: var(--rose); }
+
+  .empty-state {
+    padding: 22px 2px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    font-style: italic;
+  }
+
+  .grace {
+    margin: 24px 20px 0;
+    padding: 16px 18px;
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #1B1E1A;
+    --card: #242821;
+    --ink: #E9ECE4;
+    --muted: #93A18F;
+    --line: #33372E;
+    --rose: #E08A96;
+    --rose-bg: #3A2429;
+    --gold: #E0A94A;
+    --gold-bg: #3A2E17;
+    --sage: #9DBB92;
+    --sage-bg: #29332A;
+    --slate: #93A7B0;
+    --slate-bg: #29343A;
+  }
+
+  .loading {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+</style>
+</head>
+<body style="margin:0;">
+<script src="theme.js?v=1"></script>
+<script src="priority-alert.js?v=4"></script>
+<script src="cancel-alert.js?v=1"></script>
+<script src="mascot.js?v=30"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="auth.js?v=1"></script>
+<script src="visits.js?v=1"></script>
+<script src="achievements.js?v=5"></script>
+<div id="app"></div>
+
+<script>
+(function() {
+  const SECTIONS = [
+    { key: 'subscription', label: 'Subscriptions', eyebrow: 'Recurring Costs', singular: 'subscription', plural: 'subscriptions', placeholder: 'e.g. Netflix, Spotify' },
+    { key: 'bill', label: 'Bills', eyebrow: 'Recurring Costs', singular: 'bill', plural: 'bills', placeholder: 'e.g. Electric, Internet' }
+  ];
+
+  const now = new Date();
+
+  const defaultState = {
+    bill: [],
+    subscription: []
+    // each item: { id, name, cost, cycle: 'monthly'|'yearly', renewalDate: 'YYYY-MM-DD', category, notes, cancelPending, addedBy }
+  };
+
+  let state = null;
+  let achievementCounts = {};
+  let prevLifetimeCount = null;
+  const app = document.getElementById('app');
+  app.innerHTML = '<div class="loading">Getting things ready…</div>';
+
+  // --- Firebase setup (same project as Tending Today, separate document) ---
+  const firebaseConfig = {
+    apiKey: "AIzaSyAzJ9EFIGW1l5-IgmrD2MyGTe8_WIcL3hs",
+    authDomain: "tendingtoday-f30e4.firebaseapp.com",
+    projectId: "tendingtoday-f30e4",
+    storageBucket: "tendingtoday-f30e4.firebasestorage.app",
+    messagingSenderId: "334824670755",
+    appId: "1:334824670755:web:c21c47bc292f8ed711d396",
+    measurementId: "G-LJ7XZP3FE1"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const docRef = db.collection('household').doc('subscriptions-state');
+
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function addCycle(dateStr, cycle) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, (m || 1) - 1, d || 1);
+    if (cycle === 'yearly') dt.setFullYear(dt.getFullYear() + 1);
+    else dt.setMonth(dt.getMonth() + 1);
+    return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+  }
+
+  function daysUntil(dateStr) {
+    if (!dateStr) return Infinity;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const target = new Date(y, (m || 1) - 1, d || 1);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    target.setHours(0, 0, 0, 0);
+    return Math.round((target - today) / 86400000);
+  }
+
+  // Renewal dates are stored as the *next upcoming* due date. Any date
+  // that's fallen into the past gets rolled forward one cycle at a time
+  // (handles a long-untouched app catching up multiple cycles at once) —
+  // same lazy "first page load to notice fixes it" pattern Tending Today's
+  // weekly reset and the mascot's monthly baseline already use. No manual
+  // "mark renewed" step needed.
+  function normalizeAndAdvance(raw) {
+    let s = raw ? JSON.parse(JSON.stringify(raw)) : structuredClone(defaultState);
+    let changed = false;
+    const today = todayStr();
+    SECTIONS.forEach((sec) => {
+      if (!Array.isArray(s[sec.key])) { s[sec.key] = []; changed = true; }
+      s[sec.key].forEach((it) => {
+        if (typeof it.cost !== 'number' || isNaN(it.cost)) { it.cost = 0; changed = true; }
+        if (it.cycle !== 'monthly' && it.cycle !== 'yearly') { it.cycle = 'monthly'; changed = true; }
+        if (typeof it.category !== 'string') { it.category = ''; changed = true; }
+        if (typeof it.notes !== 'string') { it.notes = ''; changed = true; }
+        if (typeof it.cancelPending !== 'boolean') { it.cancelPending = false; changed = true; }
+        if (typeof it.addedBy !== 'string') { it.addedBy = ''; changed = true; }
+        if (!it.renewalDate) { it.renewalDate = today; changed = true; }
+        let guard = 0;
+        while (it.renewalDate < today && guard < 600) {
+          it.renewalDate = addCycle(it.renewalDate, it.cycle);
+          changed = true;
+          guard++;
+        }
+      });
+    });
+    return { s, changed };
+  }
+
+  function makeId() {
+    return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  async function load() {
+    try {
+      const snap = await docRef.get();
+      const { s, changed } = normalizeAndAdvance(snap.exists ? snap.data() : null);
+      state = s;
+      if (changed || !snap.exists) {
+        await save();
+      }
+      render();
+
+      docRef.onSnapshot((snapshot) => {
+        if (!snapshot.exists) return;
+        const { s: incoming, changed: needsWrite } = normalizeAndAdvance(snapshot.data());
+        state = incoming;
+        render();
+        if (needsWrite) save();
+      });
+    } catch (e) {
+      console.error('Firestore load failed', e);
+      state = structuredClone(defaultState);
+      app.innerHTML = '<div class="loading">Couldn’t connect — check your connection and reload.</div>';
+    }
+  }
+
+  async function save() {
+    try {
+      // Re-run the renewal-advance check against the current real date right
+      // before writing, same guard tending-today.html uses against a stale
+      // tab pushing an old renewal date back over one another device already
+      // rolled forward.
+      const { s: corrected, changed } = normalizeAndAdvance(state);
+      state = corrected;
+      await docRef.set(state);
+      if (window.trackPageUpdate) window.trackPageUpdate('subscriptions');
+      if (changed) render();
+    } catch (e) {
+      console.error('Firestore save failed', e);
+    }
+  }
+
+  function formatMoney(n) {
+    return '$' + (Math.round((n || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function dueLabel(days) {
+    if (days < 0) return `Overdue by ${Math.abs(days)}d`;
+    if (days === 0) return 'Renews today';
+    if (days === 1) return 'Renews tomorrow';
+    return `Renews in ${days}d`;
+  }
+
+  function costSummary(items, singular, plural) {
+    if (!items.length) return '';
+    const monthlySum = items.filter((i) => i.cycle === 'monthly').reduce((sum, i) => sum + (i.cost || 0), 0);
+    const yearlySum = items.filter((i) => i.cycle === 'yearly').reduce((sum, i) => sum + (i.cost || 0), 0);
+    const noun = items.length === 1 ? singular : plural;
+    const costParts = [];
+    if (monthlySum > 0) costParts.push(`${formatMoney(monthlySum)} a month`);
+    if (yearlySum > 0) costParts.push(`${formatMoney(yearlySum)} a year`);
+    const costText = costParts.length ? ` for ${costParts.join(', ')}` : '';
+    return `${items.length} ${noun}${costText}`;
+  }
+
+  function billsSVG(fraction) {
+    // A stack of receipts builds up as bills/subscriptions pile onto both
+    // sections together — same staged-fade-in technique as the other pages'
+    // header icons.
+    const slips = [
+      { x: 9, y: 32, w: 38, h: 17, fill: '#5C6E78', op: Math.min(1, fraction / 0.1) },
+      { x: 14, y: 20, w: 28, h: 14, fill: '#7C9075', op: Math.min(1, Math.max(0, (fraction - 0.35)) / 0.2) },
+      { x: 19, y: 9, w: 18, h: 12, fill: '#C08A2E', op: Math.min(1, Math.max(0, (fraction - 0.7)) / 0.2) }
+    ];
+    const slipShapes = slips.map((b) => `<g style="opacity:${b.op}; transition: opacity 0.4s ease;">
+        <rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="2.5" fill="#FFFFFF" stroke="${b.fill}" stroke-width="2"/>
+        <rect x="${b.x + 5}" y="${b.y + b.h * 0.3}" width="${b.w - 10}" height="2" fill="${b.fill}" opacity="0.55"/>
+        <rect x="${b.x + 5}" y="${b.y + b.h * 0.6}" width="${(b.w - 10) * 0.6}" height="2" fill="${b.fill}" opacity="0.55"/>
+      </g>`).join('');
+    return `<svg viewBox="0 0 56 56" width="56" height="56">${slipShapes}</svg>`;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/"/g, '&quot;');
+  }
+
+  function checkIcon() {
+    return `<svg width="12" height="12" viewBox="0 0 16 16"><path d="M3 8.5L6.5 12L13 4" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function homeIcon() {
+    return `<svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 7.5L8 2.5L14 7.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M4 6.5V13H12V6.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+  }
+
+  function render() {
+    const dateLabel = now.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    const totalItems = SECTIONS.reduce((sum, sec) => sum + state[sec.key].length, 0);
+    const frac = Math.min(1, totalItems / 10);
+    const lifetimeCount = window.sumAchievementCounts
+      ? window.sumAchievementCounts(achievementCounts, ['bill:added', 'subscription:added'])
+      : 0;
+    const didIncrease = prevLifetimeCount !== null && lifetimeCount > prevLifetimeCount;
+    prevLifetimeCount = lifetimeCount;
+    const badgeTier = window.badgeTierForCount ? window.badgeTierForCount(lifetimeCount) : 0;
+    const tierClass = badgeTier >= 4 ? 'shimmer-prestige' : badgeTier === 3 ? 'shimmer-t3' : badgeTier === 2 ? 'shimmer-t2' : badgeTier === 1 ? 'shimmer-t1' : '';
+    const badgePalette = badgeTier >= 4 && window.badgePaletteForTier ? window.badgePaletteForTier(badgeTier) : null;
+    const badgeOpacity = window.badgeShimmerOpacity ? window.badgeShimmerOpacity(badgeTier) : 0;
+    const badgeStyleParts = [];
+    if (badgeTier >= 1) badgeStyleParts.push(`--badge-opacity:${badgeOpacity}`);
+    if (badgePalette) badgeStyleParts.push(`--badge-edge:${badgePalette.edge}`, `--badge-shimmer:${badgePalette.shimmer}`);
+    const badgeStyle = badgeStyleParts.length ? ` style="${badgeStyleParts.join('; ')};"` : '';
+    const countClasses = ['progress-count', tierClass, didIncrease ? 'count-pop' : ''].filter(Boolean).join(' ');
+
+    let html = '';
+    html += `<div class="header">
+      <div class="header-icons">
+        <a class="home-btn" href="home.html" aria-label="Home">${homeIcon()}</a>
+      </div>
+      <div class="header-text">
+        <h1>Subs &amp; Bills</h1>
+        <div class="date">${dateLabel}</div>
+      </div>
+      <div class="icon-progress">
+        <div class="bills-wrap">${billsSVG(frac)}</div>
+        <div class="${countClasses}"${badgeStyle} aria-label="Lifetime bills and subscriptions added">${lifetimeCount}</div>
+      </div>
+    </div>`;
+
+    SECTIONS.forEach((sec) => {
+      const items = [...state[sec.key]].sort((a, b) => a.renewalDate.localeCompare(b.renewalDate));
+      const summary = costSummary(items, sec.singular, sec.plural);
+
+      html += `<div class="section">
+        <div class="eyebrow">${sec.eyebrow}</div>
+        <h2>${sec.label}</h2>
+        ${summary ? `<div class="cost-summary">${summary}</div>` : ''}
+        <input type="text" class="add-input" id="new-name-${sec.key}" placeholder="${sec.placeholder}" autocomplete="off">
+        <div class="add-row-split">
+          <input type="number" min="0" step="0.01" class="add-input" id="new-cost-${sec.key}" placeholder="Cost">
+          <select class="add-input" id="new-cycle-${sec.key}" style="flex:0 0 110px;">
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </div>
+        <input type="date" class="add-input" id="new-date-${sec.key}" value="${todayStr()}">
+        <button class="add-btn-wide" data-add="${sec.key}">Add ${sec.singular}</button>`;
+
+      if (items.length === 0) {
+        html += `<div class="empty-state">No ${sec.plural} tracked yet.</div>`;
+      } else {
+        items.forEach((it) => {
+          const days = daysUntil(it.renewalDate);
+          const dueSoon = days <= 7;
+          html += `<div class="item-row" data-id="${it.id}">
+            <div class="item-main">
+              <div class="item-name-line">
+                <input type="text" class="item-name-input" value="${escapeAttr(it.name)}" placeholder="Name" data-edit="${sec.key}|${it.id}|name">
+                <input type="text" class="item-tag-input" value="${escapeAttr(it.category || '')}" placeholder="Category" data-edit="${sec.key}|${it.id}|category">
+              </div>
+              <div class="item-field-row">
+                <span>$</span><input type="number" min="0" step="0.01" class="item-cost-input" value="${it.cost || 0}" data-edit="${sec.key}|${it.id}|cost">
+                <select class="item-cycle-select" data-edit="${sec.key}|${it.id}|cycle">
+                  <option value="monthly" ${it.cycle === 'monthly' ? 'selected' : ''}>/mo</option>
+                  <option value="yearly" ${it.cycle === 'yearly' ? 'selected' : ''}>/yr</option>
+                </select>
+                <input type="date" class="item-date-input" value="${it.renewalDate}" data-edit="${sec.key}|${it.id}|renewalDate">
+                <span class="due-label ${dueSoon ? 'due-soon' : ''}">${dueLabel(days)}</span>
+              </div>
+              <textarea class="item-notes-input" rows="1" placeholder="Add a note (optional)" data-note="${sec.key}|${it.id}">${escapeHtml(it.notes || '')}</textarea>
+              <div class="cancel-row ${it.cancelPending ? 'checked' : ''}" data-cancel-toggle="${sec.key}|${it.id}">
+                <div class="cancel-checkbox ${it.cancelPending ? 'checked' : ''}">${checkIcon()}</div>
+                <span class="cancel-label">Mark for cancellation</span>
+              </div>
+              ${it.addedBy ? `<div class="added-by">Added by ${escapeHtml(it.addedBy)}</div>` : ''}
+            </div>
+            <button class="remove-btn" data-remove="${sec.key}|${it.id}" aria-label="Remove">×</button>
+          </div>`;
+        });
+      }
+
+      html += `</div>`;
+    });
+
+    html += `<div class="grace">Renewal dates roll forward on their own once they pass — no need to mark anything as paid. Check "Mark for cancellation" and a reminder ticker shows up site-wide once it's due within a week.</div>`;
+    html += `<div style="height:56px;"></div>`;
+
+    app.innerHTML = html;
+    bindEvents();
+  }
+
+  function bindEvents() {
+    SECTIONS.forEach((sec) => {
+      const nameInput = app.querySelector(`#new-name-${sec.key}`);
+      const costInput = app.querySelector(`#new-cost-${sec.key}`);
+      const cycleInput = app.querySelector(`#new-cycle-${sec.key}`);
+      const dateInput = app.querySelector(`#new-date-${sec.key}`);
+      const addBtn = app.querySelector(`[data-add="${sec.key}"]`);
+
+      async function addItem() {
+        const name = nameInput.value.trim();
+        if (!name) return;
+        state[sec.key].push({
+          id: makeId(),
+          name,
+          cost: parseFloat(costInput.value) || 0,
+          cycle: cycleInput.value === 'yearly' ? 'yearly' : 'monthly',
+          renewalDate: dateInput.value || todayStr(),
+          category: '',
+          notes: '',
+          cancelPending: false,
+          addedBy: (window.getHouseholdUserLabel && window.getHouseholdUserLabel()) || ''
+        });
+        if (window.recordAchievement) recordAchievement(sec.key + ':added', 1);
+        await save();
+        render();
+      }
+
+      if (addBtn) addBtn.addEventListener('click', addItem);
+      [nameInput, costInput].forEach((inp) => {
+        if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } });
+      });
+    });
+
+    app.querySelectorAll('[data-remove]').forEach((el) => {
+      el.addEventListener('click', async () => {
+        const [sectionKey, id] = el.getAttribute('data-remove').split('|');
+        const removed = state[sectionKey].find((i) => i.id === id);
+        state[sectionKey] = state[sectionKey].filter((i) => i.id !== id);
+        if (removed && window.recordAchievement) {
+          recordAchievement(sectionKey + ':added', -1);
+          // A cancellation actually followed through — only fires when the
+          // removed item was marked for cancellation, and (unlike the
+          // ':added' counts above) is never decremented back down. Once
+          // followed through, it stays followed through, same permanent
+          // milestone semantics as day:perfect/pet:brush.
+          if (removed.cancelPending) recordAchievement('cancel:completed', 1);
+        }
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-edit]').forEach((el) => {
+      el.addEventListener('change', async () => {
+        const [sectionKey, id, field] = el.getAttribute('data-edit').split('|');
+        const it = state[sectionKey] && state[sectionKey].find((x) => x.id === id);
+        if (!it) return;
+        if (field === 'name') {
+          const val = el.value.trim();
+          if (val) it.name = val;
+        } else if (field === 'cost') {
+          it.cost = parseFloat(el.value) || 0;
+        } else if (field === 'cycle') {
+          it.cycle = el.value === 'yearly' ? 'yearly' : 'monthly';
+        } else if (field === 'renewalDate') {
+          it.renewalDate = el.value || todayStr();
+        } else if (field === 'category') {
+          it.category = el.value.trim();
+        }
+        await save();
+        render();
+      });
+    });
+
+    app.querySelectorAll('[data-note]').forEach((el) => {
+      el.addEventListener('change', async () => {
+        const [sectionKey, id] = el.getAttribute('data-note').split('|');
+        const it = state[sectionKey] && state[sectionKey].find((x) => x.id === id);
+        if (it) {
+          it.notes = el.value.trim();
+          await save();
+        }
+        render();
+      });
+    });
+
+    app.querySelectorAll('textarea.item-notes-input').forEach((el) => {
+      const autoGrow = () => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
+      autoGrow();
+      el.addEventListener('input', autoGrow);
+    });
+
+    app.querySelectorAll('[data-cancel-toggle]').forEach((el) => {
+      el.addEventListener('click', async () => {
+        const [sectionKey, id] = el.getAttribute('data-cancel-toggle').split('|');
+        const it = state[sectionKey] && state[sectionKey].find((x) => x.id === id);
+        if (it) {
+          it.cancelPending = !it.cancelPending;
+          await save();
+          render();
+        }
+      });
+    });
+  }
+
+  requireHouseholdAuth(function() {
+    trackPageVisit('subscriptions');
+    initTheme();
+    initPriorityAlertBanner();
+    initCancelAlertBanner();
+    initMascotWidget();
+    if (window.subscribeAchievementCounts) {
+      window.subscribeAchievementCounts(function (counts) {
+        achievementCounts = counts;
+        if (state) render();
+      });
+    }
+    load();
+  });
+})();
+</script>
+
+</body>
+</html>

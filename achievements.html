@@ -440,6 +440,7 @@
 <body style="margin:0;">
 <script src="theme.js?v=1"></script>
 <script src="priority-alert.js?v=4"></script>
+<script src="cancel-alert.js?v=1"></script>
 <script src="mascot.js?v=30"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -472,6 +473,9 @@
     if (key === 'wishlist:item') return 'Wishlist items added';
     if (key === 'meal:recipe') return 'Recipes added';
     if (key === 'contact:added') return 'Contacts added';
+    if (key === 'bill:added') return 'Bills added';
+    if (key === 'subscription:added') return 'Subscriptions added';
+    if (key === 'cancel:completed') return 'Cancellations followed through';
     if (key.indexOf('daily:') === 0) return DAILY_LABELS[key.slice(6)] || key.slice(6);
     if (key.indexOf('zone:') === 0) return 'Zone day: ' + key.slice(5);
     if (key.indexOf('deep:') === 0) return 'Deep clean: ' + key.slice(5);
@@ -540,34 +544,12 @@
     return found;
   }
 
-  // Testing only: fully wipes the test achievement's count AND its
-  // milestone stamps, unlike recordAchievement (which never un-stamps a
-  // milestone by design). This lets you re-trigger the same crossing —
-  // One-time silent cleanup: if a leftover "test:demo" entry exists from
-  // earlier testing, remove it so it doesn't linger as a phantom sticker
-  // on the real board. No UI for this — it just quietly tidies up.
-  async function cleanupTestData(raw) {
-    if (!raw) return;
-    const inCounts = raw.counts && ('test:demo' in raw.counts);
-    const inMilestones = raw.milestones && ('test:demo' in raw.milestones);
-    if (!inCounts && !inMilestones) return; // nothing to clean up
-    try {
-      await docRef.update({
-        ['counts.test:demo']: firebase.firestore.FieldValue.delete(),
-        ['milestones.test:demo']: firebase.firestore.FieldValue.delete()
-      });
-    } catch (e) {
-      console.error('Could not clean up leftover test data', e);
-    }
-  }
-
   async function load() {
     try {
       const snap = await docRef.get();
       const raw = snap.exists ? snap.data() : null;
       data = normalize(raw);
       render();
-      cleanupTestData(raw);
 
       docRef.onSnapshot((snapshot) => {
         const incoming = normalize(snapshot.exists ? snapshot.data() : null);
@@ -955,6 +937,7 @@
     trackPageVisit('achievements');
     initTheme();
     initPriorityAlertBanner();
+    initCancelAlertBanner();
     initMascotWidget();
     load();
   });

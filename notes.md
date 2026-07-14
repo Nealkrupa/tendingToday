@@ -291,6 +291,38 @@ To add this to a new page later: include `<script src="priority-alert.js">`
 right after `theme.js` and call `initPriorityAlertBanner()` alongside the
 other init calls — no other wiring needed.
 
+## Cancel-alert ticker
+
+A second sticky banner, docked directly below the priority-alert banner
+(same row-stacking, not overlapping), shows whenever a Bill or Subscription
+on `subscriptions.html` is both checked **"Mark for cancellation"** and
+renewing within the next 7 days (including anything already overdue). It
+reads something like "1 subscription marked to cancel — ✂️ Netflix (renews
+in 3 days)" and tapping it goes straight to `subscriptions.html`.
+
+This is powered by `cancel-alert.js`, a deliberate sibling of
+`priority-alert.js` rather than a generalized/shared version of it — same
+ticker mechanics (pause, then scroll), same self-contained inject-your-own-
+DOM approach, same cache-then-correct-live two-layer pattern, but its own
+color (amber, not red), its own icon, and its own Firestore doc
+(`household/subscriptions-state`), so each banner stays simple and
+independently removable.
+
+- Since both banners use `position: sticky; top: 0`, and CSS doesn't
+  auto-stack sticky siblings (a second sticky element at the same `top`
+  would just overlap the first, not sit below it), `cancel-alert.js` polls
+  `priority-alert-banner`'s rendered height every 300ms and keeps its own
+  `top` in sync — 0 when that banner is hidden, its height when shown. A
+  cheap poll was simpler and more robust here than coordinating via
+  MutationObserver/ResizeObserver across two independently-loading scripts.
+- The banner is purely derived from live data — there's no separate
+  "dismiss" state. Unchecking "Mark for cancellation," deleting the item, or
+  its renewal date rolling outside the 7-day window all make it disappear
+  on the next Firestore snapshot, the same way it appeared.
+- Include `<script src="cancel-alert.js">` right after `priority-alert.js`
+  and call `initCancelAlertBanner()` alongside `initPriorityAlertBanner()`
+  to add this to a new page.
+
 ## Household mascot
 
 Every content page (everything except `index.html` and `404.html`) shows a
@@ -558,6 +590,7 @@ beyond the Firestore rules below.
 | Wishlist | `household/wishlist-state` |
 | House Projects | `household/house-projects-state` |
 | Contacts | `household/contacts-state` |
+| Subs & Bills | `household/subscriptions-state` |
 | Star Board | `household/achievements-state` — permanent completion counts + streak, also read by every page's own header count |
 | *(hub sorting)* | `household/page-visit-counts` — one field per page, incremented on each visit |
 
@@ -640,6 +673,27 @@ Phone numbers are `tel:` links, emails are `mailto:` links, and there's a
 search box that filters by name/category/phone/email. Sorted alphabetically
 by name.
 
+**Subs & Bills** (`subscriptions.html`) — two independent flat lists,
+**Subscriptions** (shown first) and **Bills**, same fields on both: name,
+cost, billing cycle (monthly/yearly), renewal date, optional category,
+optional notes, and a "Mark for cancellation" checkbox. Each section sorts by
+soonest renewal date and shows a running cost line split by cycle rather
+than blended into one number — "3 subscriptions for $45 a month, $120 a
+year" — since a monthly total and a yearly total answer different budgeting
+questions and collapsing them would hide one or the other. `renewalDate`
+always holds the *next* upcoming due date: any date that's fallen into the
+past gets rolled forward one cycle at a time on page load (handles a
+long-untouched app catching up several cycles at once), the same lazy-reset
+pattern Tending Today's weekly reset and the mascot's monthly baseline
+already use — there's no manual "mark as paid/renewed" step. Checking "Mark
+for cancellation" on an item renewing within the next 7 days surfaces it in
+the site-wide cancel-alert ticker (see above) until it's unchecked, deleted,
+or its renewal date moves back outside that window. Deleting an item that
+was marked for cancellation (as opposed to just unmarking or deleting one
+that wasn't) also records one permanent `cancel:completed` Star Board
+milestone — a "cancellation actually followed through," never decremented,
+same one-way semantics as the mascot's perfect-day streak.
+
 ## Visual system
 
 Every page shares the same base tokens (Fraunces for display type, Inter for
@@ -657,12 +711,13 @@ progress counters above) a lifetime number just to its right:
 | Wishlist | Plum | Stack of gift boxes builds as items are added across both lists |
 | House Projects | Clay/terracotta | House builds in stages as tasks are completed |
 | Contacts | Teal | Address book fills with tabs as contacts are added |
+| Subs & Bills | Slate blue-gray | Stack of receipts builds as bills/subscriptions are added |
 
 ## Cache-busting shared scripts
 
-Every shared `.js` file (`theme.js`, `priority-alert.js`, `auth.js`,
-`visits.js`, `achievements.js`, `mascot.js`) is referenced with a version
-query string, e.g. `<script src="theme.js?v=1"></script>`.
+Every shared `.js` file (`theme.js`, `priority-alert.js`, `cancel-alert.js`,
+`auth.js`, `visits.js`, `achievements.js`, `mascot.js`) is referenced with a
+version query string, e.g. `<script src="theme.js?v=1"></script>`.
 
 This is because browsers cache `.js` files aggressively and have no way to
 know the *contents* changed just because you re-deployed — the URL
