@@ -97,7 +97,8 @@
     .concat(STAGES.flatMap((s) => [1, 2].map((f) => 'pet-body-' + s.key + '-' + f + '.png')))
     .concat(SKILLS.flatMap((skill) => ['base', 'trim', 'max-base', 'max-trim'].map((suffix) => 'hat-' + skill + '-' + suffix + '.png')))
     .concat(['hat-completionist-base.png', 'hat-completionist-trim.png'])
-    .concat(SKILLS.map((skill) => 'prop-' + skill + '.png'));
+    .concat(SKILLS.map((skill) => 'prop-' + skill + '.png'))
+    .concat(['ground-tile.png']);
 
   function preloadAssets() {
     ALL_ASSET_FILES.forEach((file) => {
@@ -348,25 +349,41 @@
   // ---------------------------------------------------------------------
   const style = document.createElement('style');
   style.textContent = `
-    /* Anchored to the bottom-right corner (not a full-width bar) so it never
-       sits on top of centered bottom-of-page controls like home.html's dark
-       mode toggle. The panel opens upward from the same corner. */
+    /* Full-width ground strip at the very bottom, but kept short (not a
+       tall bar) specifically so it still clears centered bottom-of-page
+       controls like home.html's dark mode toggle even though it now spans
+       the full width. The panel is a separately fixed-position element
+       (see #mascot-panel) so it never moves as pets wander underneath it. */
     #mascot-widget {
       position: fixed;
-      right: 16px;
-      bottom: 16px;
-      left: auto;
+      left: 0;
+      right: 0;
+      bottom: 0;
       z-index: 9500;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
       font-family: 'Inter', -apple-system, sans-serif;
       pointer-events: none;
     }
     #mascot-widget.mascot-hidden { display: none; }
-    #mascot-panel {
+    #mascot-ground {
+      position: relative;
+      width: 100%;
+      height: 72px;
+      overflow: hidden;
       pointer-events: auto;
-      margin: 0 0 10px 0;
+      background-repeat: repeat-x;
+      background-position: bottom left;
+      background-size: auto 100%;
+      border-top: 1px solid var(--line, #DDE3D6);
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.12);
+    }
+    /* Independent of the ground strip — fixed to its own corner rather than
+       anchored relative to whichever pet was tapped, so it stays put while
+       both pets keep wandering underneath it. */
+    #mascot-panel {
+      position: fixed;
+      right: 16px;
+      bottom: 88px;
+      pointer-events: auto;
       width: 300px;
       max-width: calc(100vw - 32px);
       background: var(--card, #FFFFFF);
@@ -380,18 +397,9 @@
       box-sizing: border-box;
     }
     #mascot-panel.mascot-open { display: block; }
-    #mascot-bar {
-      pointer-events: auto;
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      background: var(--card, #FFFFFF);
-      border: 1px solid var(--line, #DDE3D6);
-      border-radius: 999px;
-      padding: 6px 10px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.18);
-    }
     .mascot-slot {
+      position: absolute;
+      bottom: 4px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -402,8 +410,9 @@
       padding: 2px 6px;
       font-family: inherit;
       border-radius: 10px;
+      /* left is set inline per-pet, driven by the wandering motion state */
     }
-    .mascot-slot:hover { background: var(--bg, #EEF1EA); }
+    .mascot-slot:hover { background: rgba(255,255,255,0.3); }
     .mascot-slot-name {
       font-size: 10px;
       font-weight: 700;
@@ -584,9 +593,10 @@
     root.className = 'mascot-hidden';
     root.innerHTML = `
       <div id="mascot-panel"></div>
-      <div id="mascot-bar"></div>
+      <div id="mascot-ground"></div>
     `;
     document.body.appendChild(root);
+    root.querySelector('#mascot-ground').style.backgroundImage = "url('" + assetUrl('ground-tile.png') + "')";
     return root;
   }
 
@@ -613,6 +623,24 @@
     const el = document.createElement('div');
     el.className = 'mascot-xp-popup';
     el.textContent = '+' + SKILL_EMOJI[skill] + Math.round(xpAmount).toLocaleString();
+    el.style.left = (rect.left + rect.width / 2) + 'px';
+    el.style.top = rect.top + 'px';
+    layer.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }
+
+  // Floats a single "+N hr" popup over the whole widget (not per-pet) when
+  // the shared household completion total ticks up — since that total feeds
+  // both pets' banked hours equally and identically, one popup for the
+  // whole widget reads better than duplicating it over each sprite.
+  function showAfkPopup(hours) {
+    const ground = document.getElementById('mascot-ground');
+    if (!ground) return;
+    const rect = ground.getBoundingClientRect();
+    const layer = ensureFxLayer();
+    const el = document.createElement('div');
+    el.className = 'mascot-xp-popup';
+    el.textContent = '+' + hours.toLocaleString() + (hours === 1 ? ' hr' : ' hrs');
     el.style.left = (rect.left + rect.width / 2) + 'px';
     el.style.top = rect.top + 'px';
     layer.appendChild(el);
@@ -728,7 +756,77 @@
     for (let i = 0; i < 6; i++) getTintedImage(completionistTrimUrl, paletteAt(i).edge);
   }
 
-  function renderSprite(container, pet, frame, bankedHours) {
+  // ---------------------------------------------------------------------
+  // Wandering — each pet slowly glides to a random spot on the ground
+  // strip, then stays put for a while (long enough to actually see the
+  // tool-working animation) before picking a new spot. Purely a local
+  // visual flourish: not persisted, not synced to Firestore or other
+  // devices/tabs — every page load starts it fresh.
+  // ---------------------------------------------------------------------
+  const WALK_SPEED_PX_PER_SEC = 18; // slow, deliberate glide, not a dash
+  const MIN_MOVE_MS = 1800;         // even a short hop takes at least this long
+  const MIN_STATIONARY_MS = 8000;
+  const MAX_STATIONARY_MS = 15000;
+  const SPRITE_SIZE = 56;           // matches .mascot-sprite-box's own width/height
+
+  const motionState = {}; // petKey -> { x, fromX, toX, walking, moveStart, moveDuration, stationaryUntil }
+
+  function groundWalkableWidth() {
+    const ground = document.getElementById('mascot-ground');
+    const w = ground ? ground.clientWidth : 0;
+    return Math.max(0, (w || 300) - SPRITE_SIZE);
+  }
+
+  function ensureMotion(petKey) {
+    if (motionState[petKey]) return motionState[petKey];
+    const startX = Math.random() * groundWalkableWidth();
+    motionState[petKey] = {
+      x: startX, fromX: startX, toX: startX,
+      walking: false, moveStart: 0, moveDuration: 0,
+      // Stagger each pet's very first move so both don't set off in sync.
+      stationaryUntil: Date.now() + 1000 + Math.random() * 4000
+    };
+    return motionState[petKey];
+  }
+
+  function pickNewTarget(petKey) {
+    const m = ensureMotion(petKey);
+    const maxX = groundWalkableWidth();
+    let target = Math.random() * maxX;
+    // Avoid picking a spot barely different from the current one, so every
+    // move actually reads as "went somewhere" rather than a tiny shuffle.
+    if (maxX > 0 && Math.abs(target - m.x) < maxX * 0.2) target = maxX - target;
+    m.fromX = m.x;
+    m.toX = Math.max(0, Math.min(maxX, target));
+    m.moveStart = Date.now();
+    const dist = Math.abs(m.toX - m.fromX);
+    m.moveDuration = Math.max(MIN_MOVE_MS, (dist / WALK_SPEED_PX_PER_SEC) * 1000);
+    m.walking = true;
+  }
+
+  // Advances one pet's motion to "now" and returns its current state
+  // (current x plus whether it's actively walking, which gates the
+  // tool-working animation off while in transit).
+  function tickMotion(petKey) {
+    const m = ensureMotion(petKey);
+    const now = Date.now();
+    if (m.walking) {
+      const progress = Math.min(1, (now - m.moveStart) / m.moveDuration);
+      // easeInOutQuad — gentle start/stop rather than a linear slide.
+      const eased = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+      m.x = m.fromX + (m.toX - m.fromX) * eased;
+      if (progress >= 1) {
+        m.walking = false;
+        m.x = m.toX;
+        m.stationaryUntil = now + MIN_STATIONARY_MS + Math.random() * (MAX_STATIONARY_MS - MIN_STATIONARY_MS);
+      }
+    } else if (now >= m.stationaryUntil) {
+      pickNewTarget(petKey);
+    }
+    return m;
+  }
+
+  function renderSprite(container, pet, frame, bankedHours, isWalking) {
     const stage = pet.__stage;
     const skinColor = pet.skinColor || '#8FB4D6';
     const bodySrc = assetUrl('pet-body-' + stage.key + '-' + frame + '.png');
@@ -774,7 +872,7 @@
       const propSrc = assetUrl('prop-' + pet.activeSkill + '.png');
       const txPct = (stage.hand.x - propAnchor.x) / 64 * 100;
       const tyPct = (stage.hand.y - propAnchor.y) / 64 * 100;
-      const working = bankedHours > 0;
+      const working = bankedHours > 0 && !isWalking;
       propHtml = `
         <img class="mascot-prop ${working ? 'mascot-working' : 'mascot-resting'}" src="${propSrc}"
           style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;--mascot-prop-tx:${txPct}%;--mascot-prop-ty:${tyPct}%;transform:translate(${txPct}%, ${tyPct}%);animation-delay:${phaseDelay(1100)};" />`;
@@ -800,7 +898,9 @@
     customizeOpen: false,   // whether the hat/skin-color pickers are expanded
     frame: 1,
     prevSkillXP: null,      // last-seen { userA: {skill: hours, ...}, userB: {...} }, for XP-popup diffing
-    seededXP: false         // true once prevSkillXP holds a real first snapshot (skips popping on that first one)
+    seededXP: false,        // true once prevSkillXP holds a real first snapshot (skips popping on that first one)
+    prevLiveTotal: null,    // last-seen achievements-state total, for the AFK-bank popup diffing
+    seededLiveTotal: false  // true once prevLiveTotal holds a real first snapshot
   };
 
   function computeDerivedPets() {
@@ -836,13 +936,15 @@
     root.classList.remove('mascot-hidden');
 
     const { pets } = computeDerivedPets();
-    const bar = document.getElementById('mascot-bar');
-    bar.innerHTML = '';
+    const ground = document.getElementById('mascot-ground');
+    ground.innerHTML = '';
     PET_KEYS.forEach((key) => {
       const pet = pets[key];
+      const motion = tickMotion(key);
       const slot = document.createElement('button');
       slot.className = 'mascot-slot';
       slot.type = 'button';
+      slot.style.left = motion.x + 'px';
       slot.innerHTML = `<div class="mascot-sprite-box" id="mascot-sprite-${key}"></div><span class="mascot-slot-name">${labelForPet(key)}</span>`;
       slot.addEventListener('click', () => {
         widgetState.expandedPet = widgetState.expandedPet === key ? null : key;
@@ -850,8 +952,8 @@
         widgetState.customizeOpen = false;
         render();
       });
-      bar.appendChild(slot);
-      renderSprite(slot.querySelector('.mascot-sprite-box'), pet, widgetState.frame, pet.__bankedHours);
+      ground.appendChild(slot);
+      renderSprite(slot.querySelector('.mascot-sprite-box'), pet, widgetState.frame, pet.__bankedHours, motion.walking);
     });
 
     renderPanel(pets);
@@ -961,6 +1063,22 @@
     }
   }
 
+  // Diffs the shared household completion total (achievements-state) to pop
+  // a single "+N hr" popup whenever it goes up — this total feeds both
+  // pets' banked hours equally (bankedHours = liveTotal - hoursAlreadyGranted
+  // per pet), so a completed task anywhere in the household shows once over
+  // the whole widget rather than once per pet.
+  function popAfkForCountsDiff(counts) {
+    const liveTotal = sumCounts(counts || {});
+    if (widgetState.seededLiveTotal) {
+      const delta = liveTotal - (widgetState.prevLiveTotal || 0);
+      if (delta > 0) showAfkPopup(delta);
+    } else {
+      widgetState.seededLiveTotal = true;
+    }
+    widgetState.prevLiveTotal = liveTotal;
+  }
+
   // Diffs incoming skillXP (in hours) against the last-seen snapshot to pop
   // an XP popup — same "compare consecutive snapshots client-side" pattern
   // achievements.html already uses for its milestone celebration banner, so
@@ -1023,6 +1141,7 @@
 
       if (typeof window.subscribeAchievementCounts === 'function') {
         window.subscribeAchievementCounts((counts) => {
+          popAfkForCountsDiff(counts);
           widgetState.counts = counts;
           render();
         });

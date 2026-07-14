@@ -381,6 +381,20 @@ write hooks were needed anywhere else on the site.
   in the whole system beyond cosmetic preferences (equipped hat, skin
   color) — it updates only that one field on your own pet, never the whole
   `pets` map, so it can't clobber the other person's pet state.
+- **Wandering:** the widget is a full-width, short ground strip (tiled with
+  `pet-assets/ground-tile.png`) rather than a small fixed corner cluster —
+  kept short specifically so it still clears centered bottom-of-page
+  controls like home.html's dark mode toggle. Each pet slowly glides
+  (eased, not linear) to a random spot along the strip, then stays put for
+  a random 8–15s — long enough to actually see the tool-working animation —
+  before picking a new spot. This is purely a local visual flourish: not
+  persisted anywhere, not synced across devices/tabs, and resets fresh on
+  every page load. The tool-working animation is suppressed while a pet is
+  actively gliding, regardless of `bankedHours`, so a moving pet never
+  shows its tool mid-swing. The expanded panel is a separately
+  fixed-position element (bottom-right corner) rather than anchored to
+  whichever pet was tapped, so both pets can keep wandering underneath it
+  without the panel itself moving.
 - All of this lives in its own `household/mascot-state` document rather
   than folded into `achievements-state`, since it's a distinct concern
   (derived/cosmetic state vs. the permanent completion ledger) and keeps
