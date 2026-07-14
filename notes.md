@@ -517,8 +517,15 @@ on an ISO-ish week key computed from the date.
 **Grocery List** — plain add/check/remove list. Checked items sink to the
 bottom and can be bulk-cleared with "Clear checked."
 
-**Household Notes** — same add/check/remove pattern as groceries, styled as a
-corkboard. Resolved notes sink down and can be bulk-cleared.
+**Household Notes** — styled as a corkboard, with three independent active
+sections stacked in a fixed order: **On our minds**, **Nat's thoughts**, then
+**Website requests**. Each has its own add form and its own priority pill
+(Critical/High/Medium/Low, driving auto-sort within that section), and a
+note's `section` field is set once at creation and doesn't change afterward.
+Checking a note off in any of the three moves it into one shared **Completed
+this week** list at the bottom (sorted the same priority-first way, tagged
+with which section it came from) — that combined list is what clears itself
+automatically at the start of each new week, not each section individually.
 
 **Meal Planning** — two independent stores:
 - *Ingredients on hand* (`state.ingredients`) clears itself automatically at

@@ -484,9 +484,25 @@
     // each item: { id, text, done, priority, priorityAt, addedBy, comment }
   };
 
-  // In-memory only (not saved) — the priority for the *next* new note, set
-  // via the pill next to the add form. Not reset after adding.
-  let pendingNotePriority = 'medium';
+  // Three independent sections for *active* notes, rendered top-to-bottom in
+  // this order. Each keeps its own add-row and its own list, but a note's
+  // completed state still drains into one shared "Completed this week"
+  // section at the bottom regardless of which section it came from.
+  const SECTIONS = [
+    { key: 'mind', eyebrow: 'The Board', label: 'On our minds', placeholder: 'e.g. Ask landlord about lease renewal' },
+    { key: 'nat', eyebrow: "Nat's Board", label: "Nat's thoughts", placeholder: 'e.g. Look into new couch options' },
+    { key: 'website', eyebrow: 'The Backlog', label: 'Website requests', placeholder: 'e.g. Add a search box to Contacts' }
+  ];
+  const SECTION_KEYS = SECTIONS.map(s => s.key);
+  function sectionLabel(key) {
+    const s = SECTIONS.find(s => s.key === key);
+    return s ? s.label : SECTIONS[0].label;
+  }
+
+  // In-memory only (not saved) — the priority for the *next* new note in each
+  // section, set via the pill next to that section's add form. Not reset
+  // after adding.
+  let pendingNotePriority = { mind: 'medium', nat: 'medium', website: 'medium' };
 
   let state = null;
   let achievementCounts = {};
@@ -556,6 +572,7 @@
       if (typeof it.comment !== 'string') { it.comment = ''; changed = true; }
       if (typeof it.addedBy !== 'string') { it.addedBy = ''; changed = true; }
       if (!PRIORITY_ORDER.includes(it.priority)) { it.priority = 'medium'; changed = true; }
+      if (!SECTION_KEYS.includes(it.section)) { it.section = 'mind'; changed = true; }
       if (typeof it.priorityAt !== 'number') {
         // Backfill: we don't know the true history for existing notes, so
         // the best available guess for an already-elevated note is "now"
@@ -705,40 +722,44 @@
       </div>
     </div>`;
 
-    // Add note
-    html += `<div class="section">
-      <div class="eyebrow">Pin something up</div>
-      <div class="add-row">
-        <input type="text" class="add-input" id="new-note-input" placeholder="e.g. Ask landlord about lease renewal" autocomplete="off">
-        ${priorityPill(pendingNotePriority, 'data-cycle-pending-note-priority')}        <button class="add-btn" id="add-note-btn" aria-label="Add note">+</button>
-      </div>
-    </div>`;
-
-    // Active board
-    html += `<div class="section">
-      <div class="eyebrow">The Board</div>
-      <h2>On our minds</h2>`;
-
-    if (activeItems.length === 0) {
-      html += `<div class="empty-state">Nothing pinned yet — add something you don't want to forget.</div>`;
-    } else {
-      activeItems.forEach((it, i) => {
-        const accent = ACCENTS[i % ACCENTS.length];
-        html += `<div class="task-row" data-id="${it.id}" style="border-left-color:${accent};">
-          <div class="checkbox" data-check="${it.id}">${checkIcon()}</div>
-          ${priorityPill(it.priority, `data-cycle-note-priority="${it.id}"`)}
-          <div class="note-main">
-            <textarea class="note-input" rows="1" data-edit="${it.id}">${escapeHtml(it.text)}</textarea>
-            ${it.addedBy ? `<div class="added-by">— ${escapeHtml(it.addedBy)}</div>` : ''}
-          </div>
-          <button class="remove-btn" data-remove="${it.id}" aria-label="Remove note">×</button>
+    // One card per section: eyebrow/heading, its own add-row, then its own
+    // active list — in the fixed order On our minds -> Nat's thoughts ->
+    // Website requests. Completed notes from all three drain into one
+    // shared "Completed this week" card at the bottom instead of staying
+    // split by section.
+    SECTIONS.forEach((sec) => {
+      const sectionActive = sortByPriority(items.filter(it => !it.done && it.section === sec.key));
+      html += `<div class="section">
+        <div class="eyebrow">${sec.eyebrow}</div>
+        <h2>${sec.label}</h2>
+        <div class="add-row">
+          <input type="text" class="add-input" data-new-note-input="${sec.key}" placeholder="${escapeAttr(sec.placeholder)}" autocomplete="off">
+          ${priorityPill(pendingNotePriority[sec.key], `data-cycle-pending-note-priority="${sec.key}"`)}          <button class="add-btn" data-add-note-btn="${sec.key}" aria-label="Add note">+</button>
         </div>`;
-      });
-      html += `<div class="count-label" style="margin-top:8px;">${activeItems.length} active note${activeItems.length === 1 ? '' : 's'}</div>`;
-    }
-    html += `</div>`;
 
-    // Completed this week
+      if (sectionActive.length === 0) {
+        html += `<div class="empty-state">Nothing pinned yet — add something you don't want to forget.</div>`;
+      } else {
+        sectionActive.forEach((it, i) => {
+          const accent = ACCENTS[i % ACCENTS.length];
+          html += `<div class="task-row" data-id="${it.id}" style="border-left-color:${accent};">
+            <div class="checkbox" data-check="${it.id}">${checkIcon()}</div>
+            ${priorityPill(it.priority, `data-cycle-note-priority="${it.id}"`)}
+            <div class="note-main">
+              <textarea class="note-input" rows="1" data-edit="${it.id}">${escapeHtml(it.text)}</textarea>
+              ${it.addedBy ? `<div class="added-by">— ${escapeHtml(it.addedBy)}</div>` : ''}
+            </div>
+            <button class="remove-btn" data-remove="${it.id}" aria-label="Remove note">×</button>
+          </div>`;
+        });
+        html += `<div class="count-label" style="margin-top:8px;">${sectionActive.length} active note${sectionActive.length === 1 ? '' : 's'}</div>`;
+      }
+      html += `</div>`;
+    });
+
+    // Completed this week — combined across all three sections above, since
+    // once something's resolved which section it started in matters less
+    // than seeing everything that got handled.
     html += `<div class="section">
       <div class="eyebrow">Resolved — Since Last Reset</div>
       <h2>Completed this week</h2>`;
@@ -752,7 +773,7 @@
           ${priorityPill(it.priority, `data-cycle-note-priority="${it.id}"`)}
           <div class="note-main">
             <textarea class="note-input" rows="1" data-edit="${it.id}">${escapeHtml(it.text)}</textarea>
-            ${it.addedBy ? `<div class="added-by">— ${escapeHtml(it.addedBy)}</div>` : ''}
+            <div class="added-by">${it.addedBy ? `— ${escapeHtml(it.addedBy)} · ` : ''}${escapeHtml(sectionLabel(it.section))}</div>
             <textarea class="note-comment-input" rows="1" placeholder="Add a comment (optional)" data-comment="${it.id}">${escapeHtml(it.comment)}</textarea>
           </div>
           <button class="remove-btn" data-remove="${it.id}" aria-label="Remove note">×</button>
@@ -780,36 +801,42 @@
 
   function bindEvents() {
 
-    const input = app.querySelector('#new-note-input');
-    const addBtn = app.querySelector('#add-note-btn');
+    // One add-form per section now, rather than a single shared one —
+    // matched up by section key instead of a fixed id.
+    SECTION_KEYS.forEach((sectionKey) => {
+      const input = app.querySelector(`[data-new-note-input="${sectionKey}"]`);
+      const addBtn = app.querySelector(`[data-add-note-btn="${sectionKey}"]`);
+      if (!input || !addBtn) return;
 
-    async function addNote() {
-      const text = input.value.trim();
-      if (!text) return;
-      state.items.push({
-        id: makeId(),
-        text,
-        done: false,
-        priority: pendingNotePriority,
-        priorityAt: isElevatedPriority(pendingNotePriority) ? Date.now() : null,
-        addedBy: (window.getHouseholdUserLabel && window.getHouseholdUserLabel()) || ''
+      async function addNote() {
+        const text = input.value.trim();
+        if (!text) return;
+        state.items.push({
+          id: makeId(),
+          text,
+          done: false,
+          section: sectionKey,
+          priority: pendingNotePriority[sectionKey],
+          priorityAt: isElevatedPriority(pendingNotePriority[sectionKey]) ? Date.now() : null,
+          addedBy: (window.getHouseholdUserLabel && window.getHouseholdUserLabel()) || ''
+        });
+        input.value = '';
+        await save();
+        render();
+        const freshInput = app.querySelector(`[data-new-note-input="${sectionKey}"]`);
+        if (freshInput) freshInput.focus();
+      }
+
+      addBtn.addEventListener('click', addNote);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') addNote();
       });
-      input.value = '';
-      await save();
-      render();
-      const freshInput = app.querySelector('#new-note-input');
-      if (freshInput) freshInput.focus();
-    }
 
-    if (addBtn) addBtn.addEventListener('click', addNote);
-    if (input) input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') addNote();
-    });
-
-    const pendingNotePriorityBtn = app.querySelector('[data-cycle-pending-note-priority]');
-    if (pendingNotePriorityBtn) pendingNotePriorityBtn.addEventListener('change', () => {
-      pendingNotePriority = pendingNotePriorityBtn.value;
-      patchPriorityPill(pendingNotePriorityBtn, pendingNotePriority);
+      const pendingBtn = app.querySelector(`[data-cycle-pending-note-priority="${sectionKey}"]`);
+      if (pendingBtn) pendingBtn.addEventListener('change', () => {
+        pendingNotePriority[sectionKey] = pendingBtn.value;
+        patchPriorityPill(pendingBtn, pendingBtn.value);
+      });
     });
 
     app.querySelectorAll('[data-check]').forEach(el => {
