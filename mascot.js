@@ -68,7 +68,13 @@
     fishing: { x: 48, y: 48 }
   };
 
+  // Bump ASSET_VERSION (same cache-busting convention notes.md documents for
+  // the shared .js files) whenever a pet-assets PNG is replaced in place —
+  // browsers otherwise keep serving the old cached bytes indefinitely, since
+  // the filename itself never changes.
+  const ASSET_VERSION = 'v=2';
   const ASSET_BASE = 'pet-assets/';
+  function assetUrl(file) { return ASSET_BASE + file + '?' + ASSET_VERSION; }
 
   // ---------------------------------------------------------------------
   // Skill XP curve: RuneScape's formula (flattened: divisor 7 -> 10, i.e.
@@ -160,7 +166,15 @@
         if (mKey !== monthKey) { mKey = monthKey; baselineTotal = liveTotal; }
 
         const pets = Object.assign({}, mascotData.pets || {});
+        const isNewPet = !pets[petKey];
         const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
+        // A brand-new pet's baseline must start at the current liveTotal, not
+        // 0 — otherwise its very first grant would instantly bank the
+        // household's entire pre-existing lifetime completion count as AFK
+        // hours, instead of starting fresh at 0 and only accruing from
+        // completions going forward (same baseline-snapshot idea life stage
+        // already uses for monthProgress).
+        if (isNewPet) pet.hoursAlreadyGranted = liveTotal;
 
         // AFK bank = liveTotal - hoursAlreadyGranted (derived, never stored directly).
         const hoursAlreadyGranted = pet.hoursAlreadyGranted || 0;
@@ -247,8 +261,8 @@
     if (!hatId) return null;
     if (hatId === 'completionist') {
       return {
-        base: ASSET_BASE + 'hat-completionist-base.png',
-        trim: ASSET_BASE + 'hat-completionist-trim.png',
+        base: assetUrl('hat-completionist-base.png'),
+        trim: assetUrl('hat-completionist-trim.png'),
         anchor: HAT_ANCHOR_COMPLETIONIST,
         shimmer: 'completionist'
       };
@@ -257,8 +271,8 @@
     if (maxMatch) {
       const skill = maxMatch[1];
       return {
-        base: ASSET_BASE + 'hat-' + skill + '-max-base.png',
-        trim: ASSET_BASE + 'hat-' + skill + '-max-trim.png',
+        base: assetUrl('hat-' + skill + '-max-base.png'),
+        trim: assetUrl('hat-' + skill + '-max-trim.png'),
         anchor: HAT_ANCHOR_STANDARD,
         shimmer: 'max'
       };
@@ -269,8 +283,8 @@
       const tier = parseInt(tierMatch[2], 10);
       const tierIndex = HAT_TIER_LEVELS.indexOf(tier);
       return {
-        base: ASSET_BASE + 'hat-' + skill + '-base.png',
-        trim: ASSET_BASE + 'hat-' + skill + '-trim.png',
+        base: assetUrl('hat-' + skill + '-base.png'),
+        trim: assetUrl('hat-' + skill + '-trim.png'),
         anchor: HAT_ANCHOR_STANDARD,
         shimmer: null,
         tierIndex: tierIndex < 0 ? 0 : tierIndex
@@ -517,7 +531,7 @@
   function renderSprite(container, pet, frame, bankedHours) {
     const stage = pet.__stage;
     const skinColor = pet.skinColor || '#8FB4D6';
-    const bodySrc = ASSET_BASE + 'pet-body-' + stage.key + '-' + frame + '.png';
+    const bodySrc = assetUrl('pet-body-' + stage.key + '-' + frame + '.png');
 
     const bobPct = frame === 2 ? (stage.headBob / 64 * 100) : 0;
 
@@ -559,7 +573,7 @@
     let propHtml = '';
     if (pet.activeSkill) {
       const propAnchor = PROP_ANCHORS[pet.activeSkill];
-      const propSrc = ASSET_BASE + 'prop-' + pet.activeSkill + '.png';
+      const propSrc = assetUrl('prop-' + pet.activeSkill + '.png');
       const txPct = (stage.hand.x - propAnchor.x) / 64 * 100;
       const tyPct = (stage.hand.y - propAnchor.y) / 64 * 100;
       const working = bankedHours > 0;
@@ -660,7 +674,7 @@
       const pillsHtml = SKILLS.map((skill) => {
         const level = levelForHours(pet.skillXP[skill] || 0);
         return `<div class="mascot-pill" data-skill="${skill}">
-          <img src="${ASSET_BASE}prop-${skill}.png" />
+          <img src="${assetUrl('prop-' + skill + '.png')}" />
           <span>${level}</span>
         </div>`;
       }).join('');
