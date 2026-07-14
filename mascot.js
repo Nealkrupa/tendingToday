@@ -635,6 +635,20 @@
   const tintCache = {};   // "srcUrl|#hexColor" -> tinted data URL, once ready
   const tintPending = {}; // same key -> true while its Image is decoding
 
+  // render() rebuilds every sprite's markup from scratch on every idle-frame
+  // tick (~650ms) and every live data update — far more often than the
+  // shimmer sweep (2.6s) or prop-work bob (1.1s) animations' own durations.
+  // A freshly-created element's CSS animation always starts at 0%, so
+  // without this those animations could never complete even one full cycle
+  // before being torn down and restarted, which reads as a stutter. Giving
+  // each new element a *negative* animation-delay equal to how far the
+  // current wall-clock time sits within that animation's period makes it
+  // start already at the correct phase, so recreating the DOM node is
+  // visually seamless instead of resetting the animation.
+  function phaseDelay(durationMs) {
+    return '-' + (Date.now() % durationMs) + 'ms';
+  }
+
   function hexToRgb(hex) {
     const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
     return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 255, g: 255, b: 255 };
@@ -680,6 +694,40 @@
     return null;
   }
 
+  // Eagerly warms the tint cache for every body-frame + stock-swatch-color
+  // combination. Without this, the *first* time any given (image, color)
+  // pair is needed, getTintedImage() returns null for that render and the
+  // caller falls back to the plain (untinted, light grayscale) source image
+  // for one frame — since render() fires so often (every idle-frame tick),
+  // that fallback was visible as a stray light/white flash until the async
+  // canvas decode finished. Precomputing every combo up front means that
+  // fallback essentially never gets hit during normal use.
+  function precomputeBodyTints() {
+    STAGES.forEach((stage) => {
+      [1, 2].forEach((frame) => {
+        const src = assetUrl('pet-body-' + stage.key + '-' + frame + '.png');
+        SWATCH_COLORS.forEach((color) => getTintedImage(src, color));
+      });
+    });
+  }
+  precomputeBodyTints();
+
+  // Same idea for hat trims, but this can't run until achievements.js has
+  // defined window.badgePaletteForTier (paletteAt() falls back to a fixed
+  // gold color otherwise) — mascot.js's own top-level code runs before
+  // achievements.js's script tag on every real page, so this is called from
+  // initMascotWidget() instead, once auth/all scripts have resolved.
+  function precomputeHatTints() {
+    SKILLS.forEach((skill) => {
+      const trimUrl = assetUrl('hat-' + skill + '-trim.png');
+      HAT_TIER_LEVELS.forEach((tier, tierIndex) => { getTintedImage(trimUrl, paletteAt(tierIndex).edge); });
+      const maxTrimUrl = assetUrl('hat-' + skill + '-max-trim.png');
+      getTintedImage(maxTrimUrl, paletteAt(4).edge);
+    });
+    const completionistTrimUrl = assetUrl('hat-completionist-trim.png');
+    for (let i = 0; i < 6; i++) getTintedImage(completionistTrimUrl, paletteAt(i).edge);
+  }
+
   function renderSprite(container, pet, frame, bankedHours) {
     const stage = pet.__stage;
     const skinColor = pet.skinColor || '#8FB4D6';
@@ -699,13 +747,13 @@
         const pal = paletteAt(idx);
         tintColor = pal.edge;
         shimmerHtml = `<div class="mascot-tint-rect" style="-webkit-mask-image:url('${hat.trim}');mask-image:url('${hat.trim}');overflow:hidden;">
-          <div class="mascot-shimmer-bar" style="background:${pal.shimmer};"></div>
+          <div class="mascot-shimmer-bar" style="background:${pal.shimmer};animation-delay:${phaseDelay(2600)};"></div>
         </div>`;
       } else if (hat.shimmer === 'max') {
         const pal = paletteAt(4); // dedicated max-tier color (Amethyst)
         tintColor = pal.edge;
         shimmerHtml = `<div class="mascot-tint-rect" style="-webkit-mask-image:url('${hat.trim}');mask-image:url('${hat.trim}');overflow:hidden;">
-          <div class="mascot-shimmer-bar" style="background:${pal.shimmer};"></div>
+          <div class="mascot-shimmer-bar" style="background:${pal.shimmer};animation-delay:${phaseDelay(2600)};"></div>
         </div>`;
       } else {
         const pal = paletteAt(hat.tierIndex || 0);
@@ -729,7 +777,7 @@
       const working = bankedHours > 0;
       propHtml = `
         <img class="mascot-prop ${working ? 'mascot-working' : 'mascot-resting'}" src="${propSrc}"
-          style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;--mascot-prop-tx:${txPct}%;--mascot-prop-ty:${tyPct}%;transform:translate(${txPct}%, ${tyPct}%);" />`;
+          style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;--mascot-prop-tx:${txPct}%;--mascot-prop-ty:${tyPct}%;transform:translate(${txPct}%, ${tyPct}%);animation-delay:${phaseDelay(1100)};" />`;
     }
 
     const bodyTinted = getTintedImage(bodySrc, skinColor) || bodySrc;
@@ -962,6 +1010,8 @@
       const user = window.currentHouseholdUser;
       const email = user && user.email ? user.email.toLowerCase() : '';
       widgetState.myPetKey = EMAIL_TO_PET_KEY[email] || null;
+
+      precomputeHatTints();
 
       // Live subscriptions — both pets' cosmetics/levels stay in sync across
       // devices, and life stage updates in real time as anyone completes tasks.
