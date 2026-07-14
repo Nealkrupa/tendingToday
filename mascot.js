@@ -98,7 +98,7 @@
     .concat(SKILLS.flatMap((skill) => ['base', 'trim', 'max-base', 'max-trim'].map((suffix) => 'hat-' + skill + '-' + suffix + '.png')))
     .concat(['hat-completionist-base.png', 'hat-completionist-trim.png'])
     .concat(SKILLS.map((skill) => 'prop-' + skill + '.png'))
-    .concat(['ground-tile.png']);
+    .concat(['ground-tile-light-mode.png', 'ground-tile-dark-mode.png']);
 
   function preloadAssets() {
     ALL_ASSET_FILES.forEach((file) => {
@@ -594,8 +594,24 @@
       <div id="mascot-ground"></div>
     `;
     document.body.appendChild(root);
-    root.querySelector('#mascot-ground').style.backgroundImage = "url('" + assetUrl('ground-tile.png') + "')";
+    applyGroundTexture();
     return root;
+  }
+
+  // Swaps the ground strip's own art for a light/dark-specific tile rather
+  // than trying to theme one tile with CSS filters — checked on every
+  // render() (cheap: a no-op unless the theme actually changed) rather than
+  // wired to window.onThemeChange, since that's a single global hook other
+  // pages (e.g. home.html) already define for their own dark-mode icon
+  // refresh, and mascot.js claiming it too would silently clobber theirs.
+  let lastGroundTheme = null;
+  function applyGroundTexture() {
+    const ground = document.getElementById('mascot-ground');
+    if (!ground) return;
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    if (theme === lastGroundTheme) return;
+    lastGroundTheme = theme;
+    ground.style.backgroundImage = "url('" + assetUrl('ground-tile-' + theme + '-mode.png') + "')";
   }
 
   function ensureFxLayer() {
@@ -762,7 +778,6 @@
   // devices/tabs — every page load starts it fresh.
   // ---------------------------------------------------------------------
   const WALK_SPEED_PX_PER_SEC = 18; // slow, deliberate glide, not a dash
-  const MIN_MOVE_MS = 1800;         // even a short hop takes at least this long
   const MIN_STATIONARY_MS = 8000;
   const MAX_STATIONARY_MS = 15000;
   const SPRITE_SIZE = 56;           // matches .mascot-sprite-box's own width/height
@@ -812,7 +827,11 @@
     target = Math.max(0, Math.min(maxX, target));
     const dist = Math.abs(target - m.x);
     m.facing = target >= m.x ? 'right' : 'left';
-    m.moveDuration = Math.max(MIN_MOVE_MS, (dist / WALK_SPEED_PX_PER_SEC) * 1000);
+    // No minimum-duration floor — speed (px/sec) must stay identical
+    // regardless of distance, so duration is purely dist / speed. The
+    // "avoid a barely-different target" check above already keeps every
+    // move a meaningful distance, so this doesn't produce near-instant hops.
+    m.moveDuration = (dist / WALK_SPEED_PX_PER_SEC) * 1000;
     m.moveEndsAt = Date.now() + m.moveDuration;
     m.x = target;
     m.walking = true;
@@ -877,13 +896,17 @@
         </div>`;
     }
 
+    // Hidden outright while walking (rather than just dimmed/desaturated
+    // like the "no banked hours" resting look) — a held tool doesn't make
+    // sense mid-stride, and hiding it avoids implying a third visual state
+    // on top of the existing working/resting distinction.
     let propHtml = '';
-    if (pet.activeSkill) {
+    if (pet.activeSkill && !isWalking) {
       const propAnchor = PROP_ANCHORS[pet.activeSkill];
       const propSrc = assetUrl('prop-' + pet.activeSkill + '.png');
       const txPct = (stage.hand.x - propAnchor.x) / 64 * 100;
       const tyPct = (stage.hand.y - propAnchor.y) / 64 * 100;
-      const working = bankedHours > 0 && !isWalking;
+      const working = bankedHours > 0;
       propHtml = `
         <img class="mascot-prop ${working ? 'mascot-working' : 'mascot-resting'}" src="${propSrc}"
           style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;--mascot-prop-tx:${txPct}%;--mascot-prop-ty:${tyPct}%;transform:translate(${txPct}%, ${tyPct}%);animation-delay:${phaseDelay(1100)};" />`;
@@ -945,6 +968,7 @@
     const root = ensureDom();
     if (!widgetState.mascotDoc && !widgetState.counts) return; // nothing to show yet
     root.classList.remove('mascot-hidden');
+    applyGroundTexture();
 
     const { pets } = computeDerivedPets();
     const ground = document.getElementById('mascot-ground');
@@ -977,7 +1001,8 @@
       // started this tick — touching `left` again mid-glide with the same
       // value is harmless, but setting `transition` again would restart it.
       if (motion.justStarted) {
-        slot.style.transition = 'left ' + (motion.moveDuration / 1000) + 's ease-in-out';
+        // linear — constant speed for the whole glide, no easing in/out.
+        slot.style.transition = 'left ' + (motion.moveDuration / 1000) + 's linear';
         slot.style.left = motion.x + 'px';
       }
       const spriteBox = slot.querySelector('.mascot-sprite-box');
