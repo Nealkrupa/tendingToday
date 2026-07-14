@@ -208,10 +208,19 @@ art, no new Firestore fields:
   renders, but dims/desaturates and the animation pauses. Doubles as a
   subtle nudge — an idle-looking prop hints the household needs to knock
   out more tasks to keep the pet working, with no UI text needed to say so.
+- **Hidden** (added post-launch, alongside wandering below): while a pet is
+  actively gliding to a new spot on the ground strip, the prop doesn't
+  render at all, regardless of `bankedHours` — a held tool mid-stride
+  doesn't make sense, and hiding it outright avoids introducing a fourth
+  visual state layered on top of working/resting. Originally this state
+  just desaturated the prop the same way resting does, but that read as
+  ambiguous with genuine "out of hours" resting, so it was changed to a
+  clean hide.
 
-Both states are pure client-side derivation off `activeSkill` and the live
-`bankedHours` calculation — same derive-don't-store approach used
-throughout this design.
+All three states are pure client-side derivation off `activeSkill`, the live
+`bankedHours` calculation, and (for the hidden state) the local wandering
+motion state — same derive-don't-store approach used throughout this
+design.
 
 ### Cosmetics are fixed overlays, not per-stage art
 
@@ -456,6 +465,14 @@ its own colors even on a customizable character.
   a small offscreen `<canvas>` with plain JS instead — draw the sprite,
   remap grayscale values to the chosen tint directly. More code, but fully
   consistent across browsers.
+  **Update: this is what actually shipped.** The CSS `mix-blend-mode` +
+  `mask-image` route worked in Chromium but stayed silently broken in
+  Firefox (its default `mask-image` masking mode wasn't the culprit it
+  first appeared to be — the real fix was abandoning the CSS approach
+  entirely). `getTintedImage()` now does the canvas recolor for both the
+  body and hat trims, with every plausible (image, color) combination
+  precomputed up front so there's no async decode stall the first time a
+  given combo is actually needed mid-render.
 - **Storage:** one more small per-account field, `pets.<user>.skinColor` —
   same pattern as the existing `theme-preferences` doc (a stored per-account
   preference, read once and subscribed live).
@@ -495,6 +512,11 @@ which is otherwise flat per `notes.md`'s file structure table.
 following the same pattern — `prop-mining.png`, `hat-mining-base.png`,
 `hat-mining-trim.png`, `hat-mining-max-base.png`, `hat-mining-max-trim.png`
 — no changes to the naming scheme itself.
+
+**Ground strip (2, added post-launch with the wandering feature) —
+`ground-tile-{theme}-mode.png`:** `ground-tile-light-mode.png`,
+`ground-tile-dark-mode.png` — outside the original 25-asset count above,
+since wandering wasn't part of the initial scope.
 
 **If tier recolors get pre-baked instead of tinted live** (optional,
 per the Art Spec's "either way" note): `hat-{skill}-tier-{level}.png`, e.g.
@@ -567,3 +589,60 @@ direction/style for the 25 assets, and building the widget itself.
   tier color/shimmer treatment doesn't require redrawing the shape. Asset
   count now 25 total (down from an original 38), including 2
   idle-animation frames per life-stage body.
+
+## Post-launch additions (not in the original scope above)
+
+Two systems were added after the initial build, driven by direct feedback
+rather than pre-planned in this doc. Recorded here for history same as
+everything else.
+
+- **Displayed XP + popups.** The design above only ever measured skill
+  progress in raw AFK hours. A separate, purely cosmetic ×1000 scaling
+  (`xpForHours(hours) = hours * 1000`) was added so on-screen numbers read
+  like a game currency (level 99 = 1,000,000 XP) without touching the
+  underlying hour-based level curve, grant math, or daily cap at all. Two
+  floating-text popups ride on top of this: a per-pet "+&lt;skill
+  emoji&gt;N" popup whenever that pet's displayed XP increases by at least
+  1 (detected by diffing consecutive `mascot-state` Firestore snapshots —
+  same technique as the Star Board's milestone banner), and a separate,
+  single "+N hr" popup over the whole widget whenever the shared household
+  completion total itself increases (since that one total feeds both
+  pets' banked hours identically, showing it per-pet would be redundant).
+  Both are pure local rendering — nothing new stored.
+- **Wandering.** The widget moved from a small bottom-right corner cluster
+  to a full-width, short ground strip so both pets can slide around a
+  tiled ground texture instead of sitting in fixed slots. Each pet picks a
+  random spot, glides there at a **constant speed** (distance ÷ a fixed
+  px/sec — no easing, so short and long moves feel identically brisk, not
+  proportionally slower/faster), then sits still for a random 8–15s
+  (enough time to actually notice the tool-working animation) before
+  repeating. The glide is driven by a genuine CSS `transition` on `left` —
+  earlier JS-interpolated attempts stuttered, since the sprite's markup
+  gets rebuilt on every idle-frame tick far more often than a multi-second
+  glide's own duration, resetting any JS-driven animation partway through.
+  The sprite mirrors horizontally based on travel direction (flipping the
+  whole hat+body+prop stack together, not just the body, so attachment
+  points stay correctly aligned). The ground art itself is theme-aware
+  (separate light/dark tile PNGs, both mounted and pre-painted from the
+  start via `opacity`, not `display:none`, so a theme switch is an instant
+  visibility toggle rather than waiting on a fresh image decode) and reacts
+  to the real theme-change event rather than the widget's own next
+  incidental re-render. None of this wandering state is persisted or
+  synced — it's a local-only flourish that resets on every page load. The
+  expanded panel stayed a separately fixed-position element (not tied to
+  wherever a pet currently is), so it never has to chase a moving sprite.
+  Two ground-strip bugs surfaced post-launch and were fixed in place rather
+  than redesigned: (1) the strip's `overflow: hidden` was clipping the
+  champion life stage's hat, since that stage's head anchor sits high
+  enough on the sprite to render above the strip's own box — changed to
+  `overflow: visible` (harmless for the ground texture layers, since
+  background-image painting is already confined to an element's box
+  regardless of `overflow`); (2) each pet's random target picked
+  independently of the other could land the two pets on top of each other,
+  and there was no listener for viewport-width changes, so a pet parked
+  near the old edge before a mobile orientation change or address-bar
+  collapse/expand could render off-screen until its next move happened to
+  start. Target-picking now rejects spots too close to the other pet
+  (falling back to the largest free gap if none qualify), and a debounced
+  `resize` listener snaps any out-of-bounds pet back inside immediately,
+  bypassing the transition so it doesn't visibly glide in from off-screen.

@@ -372,7 +372,13 @@
       position: relative;
       width: 100%;
       height: 72px;
-      overflow: hidden;
+      /* visible, not hidden: the champion-stage hat is anchored high enough
+         on the sprite that it renders above this strip's own box (see
+         HAT_ANCHOR_STANDARD / stage.head.y in the champion STAGES entry) —
+         clipping here cut it off. Background layers below don't need the
+         clip: background-image painting is already confined to the
+         element's box regardless of overflow. */
+      overflow: visible;
       pointer-events: auto;
     }
     /* Both light/dark tiles are mounted (and so already decoded/painted)
@@ -833,10 +839,45 @@
     return Math.max(0, (w || 300) - SPRITE_SIZE);
   }
 
+  // Keep wandering pets from settling visually on top of each other — a
+  // target within this distance of another pet's own x is rejected below.
+  const MIN_PET_SEPARATION_PX = SPRITE_SIZE * 1.3;
+
+  function otherPetXs(excludeKey) {
+    return PET_KEYS.filter((k) => k !== excludeKey && motionState[k]).map((k) => motionState[k].x);
+  }
+
+  // Picks an x in [0, maxX] that's a meaningfully different spot from
+  // `fromX` (so every move reads as "went somewhere") and, when other pets
+  // are also wandering, stays at least MIN_PET_SEPARATION_PX from each of
+  // them. Falls back to the middle of the largest free gap between other
+  // pets (and the ground's own edges) so it always resolves even on a
+  // narrow mobile ground strip too tight to satisfy full separation.
+  function pickWanderTarget(petKey, maxX, fromX) {
+    if (maxX <= 0) return 0;
+    const others = otherPetXs(petKey);
+    const minMoveDist = maxX * 0.2;
+    const isGoodCandidate = (candidate) =>
+      Math.abs(candidate - fromX) >= minMoveDist &&
+      others.every((ox) => Math.abs(candidate - ox) >= MIN_PET_SEPARATION_PX);
+
+    for (let i = 0; i < 10; i++) {
+      const candidate = Math.random() * maxX;
+      if (isGoodCandidate(candidate)) return candidate;
+    }
+    const points = [0, ...others.slice().sort((a, b) => a - b), maxX];
+    let bestStart = 0, bestSize = -1;
+    for (let i = 0; i < points.length - 1; i++) {
+      const size = points[i + 1] - points[i];
+      if (size > bestSize) { bestSize = size; bestStart = points[i]; }
+    }
+    return Math.max(0, Math.min(maxX, bestStart + bestSize / 2));
+  }
+
   function ensureMotion(petKey) {
     if (motionState[petKey]) return motionState[petKey];
     motionState[petKey] = {
-      x: Math.random() * groundWalkableWidth(),
+      x: pickWanderTarget(petKey, groundWalkableWidth(), -Infinity),
       walking: false,
       moveDuration: 0,
       moveEndsAt: 0,
@@ -854,11 +895,7 @@
   function startNewMove(petKey) {
     const m = ensureMotion(petKey);
     const maxX = groundWalkableWidth();
-    let target = Math.random() * maxX;
-    // Avoid picking a spot barely different from the current one, so every
-    // move actually reads as "went somewhere" rather than a tiny shuffle.
-    if (maxX > 0 && Math.abs(target - m.x) < maxX * 0.2) target = maxX - target;
-    target = Math.max(0, Math.min(maxX, target));
+    const target = pickWanderTarget(petKey, maxX, m.x);
     const dist = Math.abs(target - m.x);
     m.facing = target >= m.x ? 'right' : 'left';
     // No minimum-duration floor — speed (px/sec) must stay identical
@@ -869,6 +906,38 @@
     m.moveEndsAt = Date.now() + m.moveDuration;
     m.x = target;
     m.walking = true;
+  }
+
+  // Viewport width changes (orientation flip, mobile address-bar
+  // collapse/expand) aren't watched anywhere else — without this, a pet
+  // already sitting near the old, wider edge just stays at that x and can
+  // render past the new, narrower edge until its next move happens to
+  // start (up to MAX_STATIONARY_MS later). Snap any now-out-of-bounds pet
+  // back inside immediately, bypassing the glide transition so it doesn't
+  // visibly slide in from off-screen.
+  let resizeListenerAdded = false;
+  function addResizeClampListener() {
+    if (resizeListenerAdded) return;
+    resizeListenerAdded = true;
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const maxX = groundWalkableWidth();
+        PET_KEYS.forEach((key) => {
+          const m = motionState[key];
+          if (!m || m.x <= maxX) return;
+          m.x = maxX;
+          m.walking = false;
+          const slot = document.getElementById('mascot-slot-' + key);
+          if (!slot) return;
+          slot.style.transition = 'none';
+          slot.style.left = m.x + 'px';
+          void slot.offsetWidth; // flush so the next real glide gets its own transition
+          slot.style.transition = '';
+        });
+      }, 150);
+    });
   }
 
   // Advances one pet's motion state and reports whether a *new* glide just
@@ -1223,6 +1292,7 @@
       widgetState.myPetKey = EMAIL_TO_PET_KEY[email] || null;
 
       precomputeHatTints();
+      addResizeClampListener();
 
       // Reacts to the theme actually changing (toggle click, or theme.js's
       // async cross-device correction) instead of waiting for whatever

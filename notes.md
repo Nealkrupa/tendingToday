@@ -331,17 +331,22 @@ write hooks were needed anywhere else on the site.
   widget is opened — progress accrues in the background the same way idle
   games like Melvor or AFK Arena work: you don't have to check in for it to
   happen, you just eventually see the result.
-- **Displayed XP** is a purely cosmetic ×100 scaling of the underlying banked
-  hours (`xpForHours(hours) = hours * 100`) — the level curve, grant math,
+- **Displayed XP** is a purely cosmetic ×1000 scaling of the underlying banked
+  hours (`xpForHours(hours) = hours * 1000`) — the level curve, grant math,
   and daily cap are all still computed in raw hours, only the on-screen
-  number is scaled up so it reads like a game currency. Whenever either
-  pet's XP increases (detected by diffing each live Firestore snapshot
-  against the previous one — same client-side comparison technique the Star
-  Board's milestone banner uses), a "+N XP" popup floats up from that pet's
-  sprite and fades out, as long as the increase is at least 1 (displayed)
-  XP. This fires for both pets symmetrically, from whichever device
-  happens to be open when the sync lands — it's not limited to "my own
-  pet, only when I personally triggered the grant."
+  number is scaled up so it reads like a game currency (level 99 = 1,000,000
+  displayed XP). Whenever either pet's XP increases (detected by diffing
+  each live Firestore snapshot against the previous one — same client-side
+  comparison technique the Star Board's milestone banner uses), a
+  "+&lt;emoji&gt;N" popup (e.g. "+🐟230") floats up from that pet's sprite
+  and fades out, as long as the increase is at least 1 (displayed) XP. This
+  fires for both pets symmetrically, from whichever device happens to be
+  open when the sync lands — it's not limited to "my own pet, only when I
+  personally triggered the grant." A second, separate popup ("+N hr")
+  floats once over the whole widget (not per-pet) whenever the shared
+  household completion total itself ticks up, since that total feeds both
+  pets' banked hours identically and duplicating it per-sprite would be
+  redundant.
 - **Cosmetics** are two independent overlays, not per-life-stage art:
   milestone hats (unlocked permanently at skill levels 25/50/75/90/99, plus
   a "completionist" hat when every skill hits 99) and an active-skill prop
@@ -354,19 +359,30 @@ write hooks were needed anywhere else on the site.
   active skill: **working** (animated) when `bankedHours > 0`, **resting**
   (desaturated, animation paused) when the bank is empty — a wordless nudge
   that the household needs to knock out more tasks to keep the pet
-  working. Hat unlock status and the completionist check are always
+  working. A third state — **hidden entirely** — applies while a pet is
+  actively wandering (see below), since a held tool mid-stride doesn't
+  make sense and would otherwise imply a fourth visual state on top of
+  working/resting. Hat unlock status and the completionist check are always
   computed live from current skill levels, never stored as an earned flag
   — only which hat is currently *equipped* is persisted, the same
   derive-don't-store approach used for life stage and the AFK bank.
 - **Tinting:** body art ships as grayscale pixel art so each pet can have a
-  user-chosen skin color; hats and props keep their own fixed art (hat
-  trims get their tier color from `achievements.js`'s existing
-  `BADGE_PALETTES` prestige cycle, reusing the same shimmer-sweep technique
-  as the Star Board). Recoloring is done live with CSS: a solid rectangle
-  in the chosen color sits underneath the grayscale sprite with
-  `mix-blend-mode: multiply`, clipped to the sprite's own silhouette via
-  `mask-image` so the color doesn't spill outside the transparent
-  background.
+  user-chosen skin color; hat trims (grayscale) get their tier color from
+  `achievements.js`'s existing `BADGE_PALETTES` prestige cycle, reusing the
+  same shimmer-sweep technique as the Star Board — hat *bases*, by
+  contrast, ship pre-colored and are never tinted. Recoloring is done in an
+  offscreen `<canvas>` (`getTintedImage()`): draw the source PNG once, scale
+  each opaque pixel's grayscale value by the target color's channels (the
+  same math a CSS multiply blend would do), and cache the result as a data
+  URL per (image, color) pair. The design originally called for a CSS
+  `mix-blend-mode: multiply` + `mask-image` approach with this canvas
+  technique as a documented fallback "if CSS blend-mode quirks become
+  annoying" — they did (inconsistent behavior in Firefox vs. Chromium), so
+  the canvas fallback is what actually shipped, for both the body and hat
+  trims. Every plausible color combination (each swatch × body frame, each
+  prestige color × hat trim) is precomputed once up front rather than
+  lazily on first use, so switching skin color or leveling into a new hat
+  tier never has to wait on an async decode mid-render.
 - **Two pets, one household:** both pets draw AFK hours independently from
   the same shared completion total (like two meters reading the same water
   main), so total pet output roughly doubles versus a single-pet system —
@@ -381,20 +397,53 @@ write hooks were needed anywhere else on the site.
   in the whole system beyond cosmetic preferences (equipped hat, skin
   color) — it updates only that one field on your own pet, never the whole
   `pets` map, so it can't clobber the other person's pet state.
-- **Wandering:** the widget is a full-width, short ground strip (tiled with
-  `pet-assets/ground-tile.png`) rather than a small fixed corner cluster —
-  kept short specifically so it still clears centered bottom-of-page
-  controls like home.html's dark mode toggle. Each pet slowly glides
-  (eased, not linear) to a random spot along the strip, then stays put for
-  a random 8–15s — long enough to actually see the tool-working animation —
-  before picking a new spot. This is purely a local visual flourish: not
+- **Wandering:** the widget is a full-width, short ground strip rather than
+  a small fixed corner cluster — kept short specifically so it still
+  clears centered bottom-of-page controls like home.html's dark mode
+  toggle. The ground art is theme-aware: `pet-assets/ground-tile-light-mode.png`
+  and `pet-assets/ground-tile-dark-mode.png` are both mounted as stacked
+  layers from the start (each already decoded/painted via `opacity`, not
+  `display:none` — a `display:none` element defers its own image decode
+  until shown, which reintroduces the exact swap delay this two-layer setup
+  exists to avoid), and a theme change just toggles which layer is opaque.
+  That toggle is wired directly to `window.onThemeChange` (wrapping, not
+  overwriting, since that's a single global hook `home.html` already uses
+  for its own icon refresh) so it reacts the instant the theme actually
+  changes, rather than waiting for the widget's own next incidental
+  re-render.
+  Each pet glides to a random spot along the strip at a **constant speed**
+  (no ease-in/out — duration is purely distance ÷ a fixed px/sec, so a short
+  hop and a long traverse move at identical speed), then stays put for a
+  random 8–15s — long enough to actually see the tool-working animation —
+  before picking a new spot. The glide is driven by a real CSS `transition`
+  on `left` (set once per move) rather than recomputed every tick in JS,
+  and the sprite mirrors horizontally (`scaleX(-1)`, applied to the whole
+  hat+body+prop stack so attachment points stay aligned) based on which way
+  it's currently heading. This is purely a local visual flourish: not
   persisted anywhere, not synced across devices/tabs, and resets fresh on
-  every page load. The tool-working animation is suppressed while a pet is
-  actively gliding, regardless of `bankedHours`, so a moving pet never
-  shows its tool mid-swing. The expanded panel is a separately
+  every page load. The active-skill prop is hidden entirely (not just
+  paused) while a pet is actively gliding, regardless of `bankedHours` — see
+  the working/resting/hidden note above. The expanded panel is a separately
   fixed-position element (bottom-right corner) rather than anchored to
   whichever pet was tapped, so both pets can keep wandering underneath it
   without the panel itself moving.
+  `#mascot-ground` uses `overflow: visible`, not `hidden` — the champion
+  life stage's hat is anchored high enough on the sprite (see `STAGES`'
+  `head.y` vs. `HAT_ANCHOR_STANDARD`) that it renders above the ground
+  strip's own box, so `hidden` was clipping it. This is safe because the
+  ground texture layers don't need the clip: background-image painting is
+  already confined to an element's own box regardless of `overflow`.
+  Picking each pet's next wander target also actively avoids the other
+  pet's current spot (`pickWanderTarget`, min separation ~1.3× the sprite
+  size, retried a few times and falling back to the largest free gap) so
+  the two pets don't settle visually on top of each other. Separately, a
+  debounced `resize` listener re-clamps any pet whose `x` has fallen
+  outside the ground's current walkable width (e.g. after a mobile
+  orientation change or address-bar collapse/expand) — without it, a pet
+  already near the old, wider edge could render past the new, narrower one
+  until its next move happened to start, up to `MAX_STATIONARY_MS` later.
+  The snap-back bypasses the CSS transition so it doesn't visibly glide in
+  from off-screen.
 - All of this lives in its own `household/mascot-state` document rather
   than folded into `achievements-state`, since it's a distinct concern
   (derived/cosmetic state vs. the permanent completion ledger) and keeps
@@ -629,6 +678,14 @@ every page that references it**, e.g. change every `theme.js?v=1` to
 of that script indefinitely, even after a successful deploy — this is a
 different problem from a failed deploy, and much harder to notice, since
 everything *looks* like it worked.
+
+The same problem applies to the `pet-assets/*.png` files `mascot.js` loads,
+since the filename itself never changes when the art does. Those go through
+a separate `ASSET_VERSION` constant near the top of `mascot.js` (currently
+`'v=4'`) rather than a `<script>` tag's query string — every `assetUrl()`
+call appends it automatically. **Whenever any pet-assets PNG is replaced in
+place, bump `ASSET_VERSION`** (and, since that's an edit to `mascot.js`
+itself, bump its own script-tag version too, per the rule above).
 
 ## Extending this later
 
