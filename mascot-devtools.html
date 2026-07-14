@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mascot Widget — Offline Devtools</title>
+<style>
+  :root {
+    --bg: #EEF1EA;
+    --card: #FFFFFF;
+    --ink: #263029;
+    --muted: #6B7568;
+    --line: #DDE3D6;
+    --sage: #7C9075;
+    --gold: #C08A2E;
+  }
+  html[data-theme="dark"] {
+    --bg: #1B1E1A;
+    --card: #242821;
+    --ink: #E9ECE4;
+    --muted: #93A18F;
+    --line: #33372E;
+    --sage: #9DBB92;
+    --gold: #E0A94A;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, sans-serif;
+    padding: 20px 20px 200px;
+  }
+  h1 {
+    font-size: 20px;
+    margin: 0 0 4px;
+  }
+  .warning {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin: 0 0 20px;
+    max-width: 640px;
+    line-height: 1.5;
+  }
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+    max-width: 640px;
+  }
+  .panel h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 12px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .row label {
+    font-size: 13px;
+    min-width: 150px;
+    color: var(--ink);
+  }
+  input[type="text"], input[type="number"], select, textarea {
+    font-family: inherit;
+    font-size: 13px;
+    padding: 6px 9px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+  }
+  input[type="number"] { width: 90px; }
+  input[type="color"] { width: 40px; height: 30px; padding: 0; border: none; background: none; }
+  textarea {
+    width: 100%;
+    min-height: 110px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    resize: vertical;
+  }
+  button {
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1.5px solid var(--sage);
+    background: var(--card);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--ink); }
+  button.danger { border-color: #B4636F; color: #B4636F; }
+  .pet-block {
+    border-top: 1px dashed var(--line);
+    padding-top: 10px;
+    margin-top: 10px;
+  }
+  .pet-block:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+  .pet-block h3 {
+    font-size: 14px;
+    margin: 0 0 8px;
+  }
+  .hint {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin: -4px 0 10px;
+  }
+  code { font-family: 'IBM Plex Mono', monospace; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<h1>🐾 Mascot Widget — Offline Devtools</h1>
+<p class="warning">
+  Fully disconnected from Firebase — no network calls, no real household data touched.
+  <code>firebase.firestore()</code> is replaced below with an in-memory mock (persisted to
+  <code>localStorage</code> under <code>mockFirestoreDB</code> so it survives a real page
+  reload). The actual unmodified <code>mascot.js</code> and <code>achievements.js</code> run
+  against that mock, so what you see here is the real widget code, just fed fake data.
+  Safe to leave open in a separate tab — it never touches <code>tendingtoday-f30e4</code>.
+</p>
+<div id="file-protocol-warning" style="display:none; background:#F6E8EA; border:1px solid #B4636F; color:#8A3A44; border-radius:10px; padding:12px 16px; max-width:640px; margin:0 0 20px; font-size:13px; line-height:1.5;">
+  ⚠️ <strong>You're viewing this via a <code>file://</code> URL.</strong> Firefox blocks
+  <code>&lt;canvas&gt;</code> pixel access (used for skin-color/hat-trim recoloring) on images
+  loaded from local files — this makes the pet's colors look broken here even though the real
+  deployed site (served over <code>https://</code>) is unaffected. To test recoloring locally in
+  Firefox, serve this folder instead of double-clicking the file, e.g. from a terminal in this
+  project folder run <code>python3 -m http.server 8000</code> and open
+  <code>http://localhost:8000/mascot-devtools.html</code>.
+</div>
+<script>
+  if (location.protocol === 'file:') {
+    document.getElementById('file-protocol-warning').style.display = 'block';
+  }
+</script>
+
+<div class="panel">
+  <h2>Session</h2>
+  <div class="row">
+    <label for="user-select">Signed in as</label>
+    <select id="user-select">
+      <option value="nealkrupa@gmail.com">Neal (userA)</option>
+      <option value="natjkrupa@gmail.com">Nat (userB)</option>
+    </select>
+  </div>
+  <div class="row">
+    <label for="theme-select">Theme</label>
+    <select id="theme-select">
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
+  </div>
+  <div class="row">
+    <button id="reload-btn">🔄 Reload page (real fresh-load test)</button>
+    <button id="reset-btn" class="danger">🗑 Reset all mock data</button>
+  </div>
+  <div class="hint">"Reload page" does a real <code>location.reload()</code> — the most faithful way to
+    test the actual visit-grant transaction, since it re-runs mascot.js from scratch exactly like a
+    real page navigation would.</div>
+</div>
+
+<div class="panel">
+  <h2>Household totals</h2>
+  <div class="row">
+    <label for="total-count">Lifetime completions</label>
+    <input type="number" id="total-count" min="0">
+    <button id="apply-total-btn">Apply</button>
+    <button id="bump-total-btn">+1</button>
+  </div>
+  <div class="hint">Drives <code>household/achievements-state</code>'s <code>counts</code> map (stored here as
+    one key, <code>test:complete</code>) — this is the shared total both pets' AFK banks derive from.</div>
+</div>
+
+<div class="panel" id="pets-panel">
+  <h2>Pets</h2>
+  <!-- populated by script -->
+</div>
+
+<div class="panel">
+  <h2>Raw JSON (advanced)</h2>
+  <div class="row"><label>household/mascot-state</label></div>
+  <textarea id="raw-mascot"></textarea>
+  <div class="row" style="margin-top:8px;">
+    <button id="load-raw-btn">Load current</button>
+    <button id="apply-raw-btn">Apply JSON</button>
+  </div>
+  <div class="hint">Edit <code>monthKey</code>/<code>baselineTotal</code> here to test life-stage month
+    rollover, or hand-edit anything the quick controls above don't expose.</div>
+</div>
+
+<!-- ============================================================
+     Mock Firestore — generic collection/doc store, just enough
+     surface area for mascot.js + achievements.js:
+     onSnapshot / get / set (with merge) / runTransaction /
+     FieldValue.serverTimestamp(). Persisted to localStorage so a
+     real page reload (testing the actual visit-grant path) doesn't
+     lose state.
+     ============================================================ -->
+<script>
+(function () {
+  const STORAGE_KEY = 'mockFirestoreDB';
+
+  function loadDB() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+  function saveDB(db) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); } catch (e) {}
+  }
+
+  const db = loadDB(); // { "collection/docId": plainObjectWithMarkers }
+  const listeners = {}; // "collection/docId" -> Set of callbacks
+
+  // Timestamps and FieldValue.serverTimestamp() need marker objects that
+  // survive JSON (de)serialization as plain data, then get reconstituted
+  // with a working .toMillis() every time they're read back out.
+  function isTimestampMarker(v) { return v && typeof v === 'object' && v.__ts === true; }
+  function isSentinel(v) { return v && typeof v === 'object' && v.__serverTimestampSentinel === true; }
+
+  function reviveTimestamps(v) {
+    if (Array.isArray(v)) return v.map(reviveTimestamps);
+    if (isTimestampMarker(v)) {
+      const ms = v.__ms;
+      return { __ts: true, __ms: ms, toMillis: function () { return ms; } };
+    }
+    if (v && typeof v === 'object') {
+      const out = {};
+      Object.keys(v).forEach((k) => { out[k] = reviveTimestamps(v[k]); });
+      return out;
+    }
+    return v;
+  }
+
+  function deepMerge(target, src) {
+    if (isSentinel(src)) return { __ts: true, __ms: Date.now() };
+    if (src === null || typeof src !== 'object' || Array.isArray(src)) return src;
+    const out = (target && typeof target === 'object' && !Array.isArray(target) && !isTimestampMarker(target))
+      ? Object.assign({}, target) : {};
+    Object.keys(src).forEach((k) => { out[k] = deepMerge(out[k], src[k]); });
+    return out;
+  }
+
+  function notify(key) {
+    const snap = makeSnap(key);
+    (listeners[key] || new Set()).forEach((cb) => cb(snap));
+  }
+
+  function makeSnap(key) {
+    const raw = db[key];
+    return {
+      exists: raw !== undefined,
+      data: function () { return raw === undefined ? undefined : reviveTimestamps(raw); }
+    };
+  }
+
+  function docRef(collectionName, docId) {
+    const key = collectionName + '/' + docId;
+    return {
+      onSnapshot: function (cb, errCb) {
+        if (!listeners[key]) listeners[key] = new Set();
+        listeners[key].add(cb);
+        cb(makeSnap(key));
+        return function () { listeners[key].delete(cb); };
+      },
+      get: function () { return Promise.resolve(makeSnap(key)); },
+      set: function (data, opts) {
+        db[key] = (opts && opts.merge) ? deepMerge(db[key], data) : deepMerge({}, data);
+        saveDB(db);
+        notify(key);
+        return Promise.resolve();
+      }
+    };
+  }
+
+  const firestoreInstance = {
+    collection: function (name) {
+      return { doc: function (id) { return docRef(name, id); } };
+    },
+    runTransaction: function (updateFn) {
+      const tx = {
+        get: function (ref) { return ref.get(); },
+        set: function (ref, data, opts) { return ref.set(data, opts); }
+      };
+      return Promise.resolve().then(function () { return updateFn(tx); });
+    }
+  };
+
+  function firestore() { return firestoreInstance; }
+  firestore.FieldValue = {
+    serverTimestamp: function () { return { __serverTimestampSentinel: true }; }
+  };
+
+  window.firebase = { firestore: firestore };
+
+  // Exposed so the control panel below can read/write the mock store
+  // directly without going through mascot.js's own API.
+  window.__mockDB = {
+    raw: db,
+    saveDB: saveDB,
+    notify: notify,
+    reviveTimestamps: reviveTimestamps,
+    get: function (collectionName, docId) { return db[collectionName + '/' + docId]; },
+    set: function (collectionName, docId, data) {
+      db[collectionName + '/' + docId] = data;
+      saveDB(db);
+      notify(collectionName + '/' + docId);
+    }
+  };
+})();
+</script>
+
+<!-- Minimal auth.js stand-in: mascot.js only reads window.currentHouseholdUser
+     and window.getHouseholdUserLabel, never the real Google Sign-In gate. -->
+<script>
+  const TEST_LABELS = { 'nealkrupa@gmail.com': 'Neal', 'natjkrupa@gmail.com': 'Nat' };
+  window.currentHouseholdUser = { email: 'nealkrupa@gmail.com' };
+  window.getHouseholdUserLabel = function () {
+    return TEST_LABELS[window.currentHouseholdUser.email] || '';
+  };
+</script>
+
+<script src="achievements.js?v=5"></script>
+<script src="mascot.js?v=13"></script>
+
+<script>
+(function () {
+  const ACH_DOC = ['household', 'achievements-state'];
+  const MASCOT_DOC = ['household', 'mascot-state'];
+  const SKILLS = ['woodcutting', 'gardening', 'fishing'];
+  const PET_KEYS = ['userA', 'userB'];
+  const PET_NAMES = { userA: 'Neal', userB: 'Nat' };
+
+  function getAch() { return window.__mockDB.get(ACH_DOC[0], ACH_DOC[1]) || { counts: {} }; }
+  function setAch(data) { window.__mockDB.set(ACH_DOC[0], ACH_DOC[1], data); }
+  function getMascot() { return window.__mockDB.get(MASCOT_DOC[0], MASCOT_DOC[1]) || { pets: {} }; }
+  function setMascot(data) { window.__mockDB.set(MASCOT_DOC[0], MASCOT_DOC[1], data); }
+
+  function totalCompletions() {
+    const counts = (getAch().counts) || {};
+    return Object.keys(counts).reduce(function (sum, k) { return sum + (counts[k] || 0); }, 0);
+  }
+
+  // --- Session controls ---
+  const userSelect = document.getElementById('user-select');
+  userSelect.addEventListener('change', function () {
+    window.currentHouseholdUser = { email: userSelect.value };
+    // Re-run init so myPetKey / labels pick up the new signed-in user —
+    // acceptable for a devtools page even though it duplicates a couple of
+    // intervals; a real "Reload page" is the faithful test for that anyway.
+    if (window.initMascotWidget) window.initMascotWidget();
+  });
+
+  const themeSelect = document.getElementById('theme-select');
+  themeSelect.addEventListener('change', function () {
+    document.documentElement.setAttribute('data-theme', themeSelect.value);
+  });
+
+  document.getElementById('reload-btn').addEventListener('click', function () {
+    location.reload();
+  });
+  document.getElementById('reset-btn').addEventListener('click', function () {
+    if (confirm('Clear all mock Firestore data (achievements + mascot state)?')) {
+      localStorage.removeItem('mockFirestoreDB');
+      location.reload();
+    }
+  });
+
+  // --- Household totals ---
+  const totalInput = document.getElementById('total-count');
+  totalInput.value = totalCompletions();
+  document.getElementById('apply-total-btn').addEventListener('click', function () {
+    setAch({ counts: { 'test:complete': parseInt(totalInput.value, 10) || 0 } });
+  });
+  document.getElementById('bump-total-btn').addEventListener('click', function () {
+    const next = totalCompletions() + 1;
+    setAch({ counts: { 'test:complete': next } });
+    totalInput.value = next;
+  });
+
+  // --- Per-pet controls ---
+  function defaultPet() {
+    return {
+      hoursAlreadyGranted: 0,
+      dailyGrantKey: '',
+      dailyGrantedSoFar: 0,
+      lastVisitAt: null,
+      activeSkill: 'woodcutting',
+      skillXP: { woodcutting: 0, gardening: 0, fishing: 0 },
+      equippedHat: null,
+      skinColor: '#8FB4D6'
+    };
+  }
+
+  function renderPetControls() {
+    const mascotData = getMascot();
+    const pets = mascotData.pets || {};
+    const wrap = document.getElementById('pets-panel');
+    wrap.innerHTML = '<h2>Pets</h2>';
+
+    PET_KEYS.forEach(function (petKey) {
+      const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
+      const block = document.createElement('div');
+      block.className = 'pet-block';
+      block.innerHTML =
+        '<h3>' + PET_NAMES[petKey] + ' (' + petKey + ')</h3>' +
+        '<div class="row"><label>Hours already granted</label><input type="number" step="0.1" data-field="hoursAlreadyGranted" data-pet="' + petKey + '" value="' + pet.hoursAlreadyGranted + '"></div>' +
+        '<div class="row"><label>Daily granted so far</label><input type="number" step="0.1" data-field="dailyGrantedSoFar" data-pet="' + petKey + '" value="' + pet.dailyGrantedSoFar + '"></div>' +
+        '<div class="row"><label>Active skill</label><select data-field="activeSkill" data-pet="' + petKey + '">' +
+          SKILLS.map(function (s) { return '<option value="' + s + '"' + (pet.activeSkill === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') +
+        '</select></div>' +
+        SKILLS.map(function (s) {
+          return '<div class="row"><label>' + s + ' hours (skillXP)</label><input type="number" step="0.1" data-field="skillXP.' + s + '" data-pet="' + petKey + '" value="' + (pet.skillXP[s] || 0) + '"></div>';
+        }).join('') +
+        '<div class="row"><label>Equipped hat</label><input type="text" data-field="equippedHat" data-pet="' + petKey + '" value="' + (pet.equippedHat || '') + '" placeholder="e.g. woodcutting-25, woodcutting-max, completionist"></div>' +
+        '<div class="row"><label>Skin color</label><input type="color" data-field="skinColor" data-pet="' + petKey + '" value="' + (pet.skinColor || '#8FB4D6') + '"></div>' +
+        '<div class="row"><button data-apply-pet="' + petKey + '">Apply this pet’s fields</button></div>' +
+        '<div class="row"><label>Rewind last-visit by (minutes)</label><input type="number" id="rewind-' + petKey + '" value="60"><button data-rewind-pet="' + petKey + '">Rewind + note</button></div>' +
+        '<div class="hint">Rewinding last-visit simulates "it’s been N minutes since this pet’s owner last loaded a page" — click "Reload page" above afterward to trigger the real visit-grant transaction against that gap.</div>';
+      wrap.appendChild(block);
+    });
+
+    wrap.querySelectorAll('[data-apply-pet]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const petKey = btn.getAttribute('data-apply-pet');
+        applyPetFields(petKey);
+      });
+    });
+    wrap.querySelectorAll('[data-rewind-pet]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const petKey = btn.getAttribute('data-rewind-pet');
+        rewindLastVisit(petKey);
+      });
+    });
+  }
+
+  function applyPetFields(petKey) {
+    const mascotData = getMascot();
+    const pets = Object.assign({}, mascotData.pets || {});
+    const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
+    document.querySelectorAll('[data-pet="' + petKey + '"]').forEach(function (el) {
+      const field = el.getAttribute('data-field');
+      let val = el.type === 'number' ? parseFloat(el.value) || 0 : el.value;
+      if (field.indexOf('skillXP.') === 0) {
+        const skill = field.split('.')[1];
+        pet.skillXP = Object.assign({}, pet.skillXP, { [skill]: val });
+      } else if (field === 'equippedHat') {
+        pet[field] = val.trim() ? val.trim() : null;
+      } else {
+        pet[field] = val;
+      }
+    });
+    pets[petKey] = pet;
+    setMascot(Object.assign({}, mascotData, { pets: pets }));
+    renderPetControls();
+    renderRawMascot();
+  }
+
+  function rewindLastVisit(petKey) {
+    const minutesInput = document.getElementById('rewind-' + petKey);
+    const minutes = parseFloat(minutesInput.value) || 0;
+    const mascotData = getMascot();
+    const pets = Object.assign({}, mascotData.pets || {});
+    const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
+    const nowMs = Date.now();
+    const currentMs = (pet.lastVisitAt && pet.lastVisitAt.__ms) ? pet.lastVisitAt.__ms : nowMs;
+    pet.lastVisitAt = { __ts: true, __ms: currentMs - minutes * 60000 };
+    pets[petKey] = pet;
+    setMascot(Object.assign({}, mascotData, { pets: pets }));
+    alert('Rewound ' + PET_NAMES[petKey] + '’s last-visit time by ' + minutes + ' minute(s). Click "Reload page" to trigger the grant.');
+  }
+
+  // --- Raw JSON panel ---
+  function renderRawMascot() {
+    document.getElementById('raw-mascot').value = JSON.stringify(getMascot(), null, 2);
+  }
+  document.getElementById('load-raw-btn').addEventListener('click', renderRawMascot);
+  document.getElementById('apply-raw-btn').addEventListener('click', function () {
+    try {
+      const parsed = JSON.parse(document.getElementById('raw-mascot').value);
+      setMascot(parsed);
+      renderPetControls();
+    } catch (e) {
+      alert('Invalid JSON: ' + e.message);
+    }
+  });
+
+  renderPetControls();
+  renderRawMascot();
+
+  // Keep the quick-edit panel in sync if the widget itself writes to
+  // mascot-state (e.g. clicking "Train this skill" or equipping a hat).
+  window.firebase.firestore().collection('household').doc('mascot-state').onSnapshot(function () {
+    renderPetControls();
+    renderRawMascot();
+  });
+
+  window.initMascotWidget();
+})();
+</script>
+
+</body>
+</html>

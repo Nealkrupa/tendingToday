@@ -53,10 +53,10 @@
   // silhouettes (checked bounding boxes; exact pixel-perfection isn't
   // critical here, just reasonable placement per the design doc).
   const STAGES = [
-    { key: 'fresh', label: 'Fresh', min: 0, head: { x: 29, y: 46 }, hand: { x: 39, y: 52 }, headBob: -4 },
-    { key: 'in-training', label: 'In-Training', min: 10, head: { x: 30, y: 34 }, hand: { x: 42, y: 46 }, headBob: 4 },
-    { key: 'rookie', label: 'Rookie', min: 80, head: { x: 32, y: 26 }, hand: { x: 50, y: 40 }, headBob: 2 },
-    { key: 'champion', label: 'Champion', min: 300, head: { x: 31, y: 8 }, hand: { x: 55, y: 28 }, headBob: -2 }
+    { key: 'fresh', label: 'Fresh', min: 0, head: { x: 29, y: 48 }, hand: { x: 39, y: 52 }, headBob: -4 },
+    { key: 'in-training', label: 'In-Training', min: 10, head: { x: 28, y: 38 }, hand: { x: 32, y: 51 }, headBob: 4 },
+    { key: 'rookie', label: 'Rookie', min: 80, head: { x: 27, y: 32 }, hand: { x: 25, y: 50 }, headBob: 2 },
+    { key: 'champion', label: 'Champion', min: 300, head: { x: 27, y: 15 }, hand: { x: 22, y: 48 }, headBob: -2 }
   ];
 
   // Attachment point *within* each hat/prop asset's own 64x64 canvas (where
@@ -65,8 +65,12 @@
   // per skill (see final report note: the shipped max-skill art is
   // pixel-identical to the standard hat art in this asset batch, so one
   // anchor covers both).
-  const HAT_ANCHOR_STANDARD = { x: 31, y: 36 };
-  const HAT_ANCHOR_COMPLETIONIST = { x: 31, y: 44 };
+  const HAT_ANCHOR_STANDARD = { x: 31, y: 46 };
+  // Matches HAT_ANCHOR_STANDARD rather than its own value — every hat is
+  // drawn with its attachment pixel at the same relative canvas position
+  // (per the art spec), so a separate anchor here had no basis and was just
+  // making the completionist hat sit visibly higher than every other hat.
+  const HAT_ANCHOR_COMPLETIONIST = { x: 31, y: 46 };
   const PROP_ANCHORS = {
     woodcutting: { x: 33, y: 46 },
     gardening: { x: 36, y: 54 },
@@ -419,6 +423,10 @@
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
+    /* Still used to clip the completionist/max hat's animated shimmer bar
+       to the trim's own silhouette — the actual trim recolor no longer uses
+       CSS masking at all (see getTintedImage), since mask+blend-mode turned
+       out to behave inconsistently across browsers. */
     .mascot-tint-rect {
       position: absolute;
       inset: 0;
@@ -427,8 +435,6 @@
       -webkit-mask-size: 100% 100%;
       mask-size: 100% 100%;
     }
-    .mascot-isolate { isolation: isolate; }
-    .mascot-multiply { mix-blend-mode: multiply; }
     .mascot-prop.mascot-resting {
       filter: grayscale(1) brightness(0.85);
       opacity: 0.55;
@@ -618,6 +624,62 @@
   // ---------------------------------------------------------------------
   // Builds the layered sprite (hat -> body -> prop) for one pet into the
   // given container element. `frame` is 1 or 2 (idle animation).
+  // ---------------------------------------------------------------------
+  // Canvas-based tinting — replaces the CSS mask-image + mix-blend-mode
+  // technique previously used for the body's skin color and hat trim
+  // recolors. That combination turned out to behave inconsistently across
+  // browsers (worked in Chromium, inert in Firefox), so this does the
+  // actual pixel recolor math in an offscreen <canvas> instead, which
+  // doesn't depend on any browser's mask-mode/blend-mode implementation.
+  // ---------------------------------------------------------------------
+  const tintCache = {};   // "srcUrl|#hexColor" -> tinted data URL, once ready
+  const tintPending = {}; // same key -> true while its Image is decoding
+
+  function hexToRgb(hex) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+    return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 255, g: 255, b: 255 };
+  }
+
+  // Returns the tinted data URL if it's already been computed. Otherwise
+  // kicks off the (async) computation once and returns null — render() gets
+  // called again automatically the moment it's ready (see img.onload below),
+  // so callers should fall back to the plain source image for that one
+  // in-between frame.
+  function getTintedImage(srcUrl, tintColor) {
+    const key = srcUrl + '|' + tintColor;
+    if (tintCache[key]) return tintCache[key];
+    if (!tintPending[key]) {
+      tintPending[key] = true;
+      const img = new Image();
+      img.onload = function () {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        const tint = hexToRgb(tintColor);
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] === 0) continue; // fully transparent — leave untouched
+          // Same math a CSS multiply blend would do: since this source art
+          // is grayscale (R=G=B), each channel scales by the tint's own
+          // channel value. Alpha is left alone, so the silhouette needs no
+          // separate mask at all — only pixels already opaque get recolored.
+          data[i] = Math.round((data[i] / 255) * tint.r);
+          data[i + 1] = Math.round((data[i + 1] / 255) * tint.g);
+          data[i + 2] = Math.round((data[i + 2] / 255) * tint.b);
+        }
+        ctx.putImageData(imageData, 0, 0);
+        tintCache[key] = canvas.toDataURL();
+        delete tintPending[key];
+        render();
+      };
+      img.src = srcUrl;
+    }
+    return null;
+  }
+
   function renderSprite(container, pet, frame, bankedHours) {
     const stage = pet.__stage;
     const skinColor = pet.skinColor || '#8FB4D6';
@@ -649,13 +711,11 @@
         const pal = paletteAt(hat.tierIndex || 0);
         tintColor = pal.edge;
       }
+      const trimTinted = getTintedImage(hat.trim, tintColor) || hat.trim;
       hatHtml = `
         <div style="position:absolute;inset:0;transform:translate(${txPct}%, ${tyPct}%);">
           <img src="${hat.base}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />
-          <div class="mascot-isolate" style="position:absolute;inset:0;">
-            <div class="mascot-tint-rect" style="background:${tintColor};-webkit-mask-image:url('${hat.trim}');mask-image:url('${hat.trim}');"></div>
-            <img class="mascot-multiply" src="${hat.trim}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />
-          </div>
+          <img src="${trimTinted}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />
           ${shimmerHtml}
         </div>`;
     }
@@ -672,13 +732,11 @@
           style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;--mascot-prop-tx:${txPct}%;--mascot-prop-ty:${tyPct}%;transform:translate(${txPct}%, ${tyPct}%);" />`;
     }
 
+    const bodyTinted = getTintedImage(bodySrc, skinColor) || bodySrc;
     container.innerHTML = `
-      ${hatHtml}
-      <div class="mascot-isolate" style="position:absolute;inset:0;">
-        <div class="mascot-tint-rect" style="background:${skinColor};-webkit-mask-image:url('${bodySrc}');mask-image:url('${bodySrc}');"></div>
-        <img class="mascot-multiply" src="${bodySrc}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />
-      </div>
       ${propHtml}
+      <img src="${bodyTinted}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />
+      ${hatHtml}
     `;
   }
 
