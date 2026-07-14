@@ -34,6 +34,15 @@
 
   * { box-sizing: border-box; }
 
+  /* Number inputs on this page (budget, material costs) read as plain text
+     fields with a numeric keyboard on mobile, not counters — the native
+     up/down spinner buttons look out of place next to the other inline-edit
+     text fields and add nothing here since nobody's clicking through values
+     one at a time. */
+  input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
   body {
     margin: 0;
     background: var(--bg);
