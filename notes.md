@@ -25,6 +25,7 @@ Put all of these in the same folder on your site:
 | `theme.js` | Shared dark mode toggle used by every page except `index.html` |
 | `achievements.js` | Shared completion tracker used by every content page — powers the Star Board and each page's own permanent lifetime count next to its header icon |
 | `priority-alert.js` | Shared banner used by every page except `index.html` — flags unresolved Critical/High priority notes |
+| `mascot.js` | Shared household mascot widget used by every content page — persistent pixel-art pet per household member, docked at the bottom of the screen |
 
 **Important:** `index.html` is intentionally kept separate and minimal since
 this is your personal site's domain — it's just a plain-text directory link
@@ -290,6 +291,94 @@ To add this to a new page later: include `<script src="priority-alert.js">`
 right after `theme.js` and call `initPriorityAlertBanner()` alongside the
 other init calls — no other wiring needed.
 
+## Household mascot
+
+Every content page (everything except `index.html` and `404.html`) shows a
+small pixel-art pet widget docked to the **bottom** of the screen — one pet
+per household member, side by side. It's self-contained the same way
+`priority-alert.js` is: `mascot.js` injects its own `<style>` block and its
+own DOM node at the end of `<body>`, so no page's own markup needed to
+change. Each page calls `window.initMascotWidget()` once, right alongside
+`initPriorityAlertBanner()` inside the `requireHouseholdAuth(...)` callback.
+
+Two progression systems render on the same sprite but never share math, and
+both are pure derivations off `household/achievements-state.counts` — the
+same lifetime completion total that already powers the Star Board. No new
+write hooks were needed anywhere else on the site.
+
+- **Life stage (Fresh → In-Training → Rookie → Champion)** is shared by both
+  pets and resets every month. It's driven by completions *since the start
+  of the current month*: a stored baseline is diffed against the live
+  total (`monthProgress = liveTotal - baselineTotal`), and on month
+  rollover the first page load to notice writes a fresh baseline inside a
+  transaction — the same lazy, first-writer-wins pattern as Tending
+  Today's weekly reset and the Star Board's milestone stamping.
+- **Skill levels (Woodcutting / Gardening / Fishing)** are permanent and
+  independent per pet. Each user picks which skill is active; XP accrues
+  passively from an idle/AFK-hour bank that fills 1:1 with the household's
+  lifetime completion total (`bankedHours = liveTotal - hoursAlreadyGranted`)
+  and drains into XP on every page load, based on real elapsed time since
+  that pet's last visit (anchored on Firestore `serverTimestamp()`, never
+  the client's clock). A 15-hour/day grant cap keeps a single
+  batch-completion day (e.g. restocking the whole grocery list at once)
+  from handing out a disproportionate chunk of levels in one sitting — the
+  cap only limits how much of a day's consumed bank turns into XP, it
+  doesn't let the leftover roll over to the next day. The XP curve itself
+  is RuneScape's leveling formula, flattened (doubling every 10 levels
+  instead of 7, since this system has no faster-training-method unlocks to
+  offset RS's back-loading) and rescaled so level 99 = 1000 AFK hours.
+  Because this grant math runs on *every* page load — not just when the
+  widget is opened — progress accrues in the background the same way idle
+  games like Melvor or AFK Arena work: you don't have to check in for it to
+  happen, you just eventually see the result.
+- **Cosmetics** are two independent overlays, not per-life-stage art:
+  milestone hats (unlocked permanently at skill levels 25/50/75/90/99, plus
+  a "completionist" hat when every skill hits 99) and an active-skill prop
+  (axe/rod/trowel) that swaps automatically with whichever skill is
+  currently set active. The hat renders **behind** the body and the prop
+  renders **in front of** it — full stack, back to front: hat → body →
+  prop — so any body silhouette detail naturally overlaps the hat with no
+  extra art, while the held tool stays visible as a "the pet is working"
+  cue. The prop also reacts to whether there's live AFK fuel behind the
+  active skill: **working** (animated) when `bankedHours > 0`, **resting**
+  (desaturated, animation paused) when the bank is empty — a wordless nudge
+  that the household needs to knock out more tasks to keep the pet
+  working. Hat unlock status and the completionist check are always
+  computed live from current skill levels, never stored as an earned flag
+  — only which hat is currently *equipped* is persisted, the same
+  derive-don't-store approach used for life stage and the AFK bank.
+- **Tinting:** body art ships as grayscale pixel art so each pet can have a
+  user-chosen skin color; hats and props keep their own fixed art (hat
+  trims get their tier color from `achievements.js`'s existing
+  `BADGE_PALETTES` prestige cycle, reusing the same shimmer-sweep technique
+  as the Star Board). Recoloring is done live with CSS: a solid rectangle
+  in the chosen color sits underneath the grayscale sprite with
+  `mix-blend-mode: multiply`, clipped to the sprite's own silhouette via
+  `mask-image` so the color doesn't spill outside the transparent
+  background.
+- **Two pets, one household:** both pets draw AFK hours independently from
+  the same shared completion total (like two meters reading the same water
+  main), so total pet output roughly doubles versus a single-pet system —
+  a deliberate tradeoff, not an oversight. Life stage is the one thing kept
+  shared, since it's derived from one household-wide monthly baseline
+  rather than anything either pet does individually.
+- **Widget interaction** is progressive disclosure, all within the
+  persistent widget — no dedicated page: tap a pet to see its 3 skill
+  levels (plus its current banked AFK hours), tap a skill pill to see that
+  skill's full XP progress and, only on your own pet, a "train this skill"
+  control. Setting a skill active is the one genuine user-initiated write
+  in the whole system beyond cosmetic preferences (equipped hat, skin
+  color) — it updates only that one field on your own pet, never the whole
+  `pets` map, so it can't clobber the other person's pet state.
+- All of this lives in its own `household/mascot-state` document rather
+  than folded into `achievements-state`, since it's a distinct concern
+  (derived/cosmetic state vs. the permanent completion ledger) and keeps
+  write contention off a document every other page already transacts
+  against constantly.
+
+Full design rationale (thresholds, XP curve math, art spec, asset naming)
+lives in `pet-assets/petDesign_notes.md`.
+
 ## Dark mode
 
 The dark/light toggle lives in a single place: a pill button at the **bottom
@@ -485,8 +574,8 @@ progress counters above) a lifetime number just to its right:
 ## Cache-busting shared scripts
 
 Every shared `.js` file (`theme.js`, `priority-alert.js`, `auth.js`,
-`visits.js`, `achievements.js`) is referenced with a version query string,
-e.g. `<script src="theme.js?v=1"></script>`.
+`visits.js`, `achievements.js`, `mascot.js`) is referenced with a version
+query string, e.g. `<script src="theme.js?v=1"></script>`.
 
 This is because browsers cache `.js` files aggressively and have no way to
 know the *contents* changed just because you re-deployed — the URL
