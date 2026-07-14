@@ -1224,6 +1224,19 @@
 
       precomputeHatTints();
 
+      // Reacts to the theme actually changing (toggle click, or theme.js's
+      // async cross-device correction) instead of waiting for whatever
+      // render() happens to run next (idle-frame tick, live data update,
+      // etc.) — that gap was the visible "delay" swapping ground layers.
+      // Wraps rather than overwrites window.onThemeChange, since that's a
+      // single global hook some pages (home.html) already use for their
+      // own dark-mode icon refresh — this must not clobber that.
+      const previousOnThemeChange = window.onThemeChange;
+      window.onThemeChange = function (theme) {
+        if (typeof previousOnThemeChange === 'function') previousOnThemeChange(theme);
+        applyGroundTexture();
+      };
+
       // Live subscriptions — both pets' cosmetics/levels stay in sync across
       // devices, and life stage updates in real time as anyone completes tasks.
       firebase.firestore().collection('household').doc('mascot-state').onSnapshot((snap) => {
