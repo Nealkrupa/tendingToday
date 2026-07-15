@@ -678,7 +678,7 @@ Real usage surfaced a problem with the AFK-bank/skill-XP half of the
 progression system (see "Two independent progression axes" above — that
 section now describes the *original* system this one replaced). Everything
 below is implemented in `mascot.js` as of this writing: `UNIVERSAL_AFK_XP_PER_HOUR
-= 500`, the XP tiers/token-block prices/premium-swatch prices match the
+= 1000`, the XP tiers/token-block prices/premium-swatch prices match the
 tables below exactly, and the migration reset (full reset, not a
 conversion — see below) runs automatically the first time an old-shape pet
 is touched. Verified end-to-end in a local mock harness (tiered grants,
@@ -1036,12 +1036,15 @@ creation or this migration, never reset again) — same underlying
 which axis (permanent skills/currency vs. monthly body) is asking.
 
 **Still open / needs real data, even though shipped:**
-- The AFK block's `UNIVERSAL_AFK_XP_PER_HOUR` shipped at `500` — the
-  starting anchor floated during design (10hr block's total XP-value
-  landing near a typical day's tiered-action XP), not a number that's been
-  through the same real-usage pass as the token/action numbers below.
-  Revisit once there's actual data on how often blocks get bought and
-  whether they feel worth the tokens.
+- The AFK block's `UNIVERSAL_AFK_XP_PER_HOUR` shipped at `500`, then raised
+  to `1000` — still a floated anchor, not a number that's been through the
+  same real-usage pass as the token/action numbers below. At `500` the
+  10hr block's total (5,000 XP) landed near a typical day's tiered-action
+  total (~4,850 XP/day, see the target-pace table above); at `1000` the
+  same block is worth roughly *two* days of real activity instead of one —
+  a deliberate move away from that original 1:1 anchor, not a recalibration
+  off new data. Revisit once there's actual data on how often blocks get
+  bought and whether they feel worth the tokens.
 - XP-per-action tier values (125 / 300 / 2,500, see table above) are a
   recommendation targeting ~200 days to level 99, not finalized — revisit
   once there's a full month of real data, same posture as everything else

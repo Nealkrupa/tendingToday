@@ -108,7 +108,7 @@
   // skill is active — separate from the per-action tier values above.
   // Rough starting anchor (not yet worked through the way the tier/token
   // numbers were) — see the doc's "Still open" list.
-  const UNIVERSAL_AFK_XP_PER_HOUR = 500;
+  const UNIVERSAL_AFK_XP_PER_HOUR = 1000;
   // Smooth-color-cycle timing shared by the completionist hat and the
   // rainbow skin (see buildCyclingLayers) — 12 layers at 750ms/slot means
   // one full cycle every 9s, same overall speed as the original 6-layer
