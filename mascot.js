@@ -789,6 +789,8 @@
     .mascot-help-toggle {
       width: 22px;
       height: 22px;
+      padding: 0;
+      box-sizing: border-box;
       border-radius: 50%;
       border: 1.5px solid var(--line, #DDE3D6);
       background: var(--bg, #EEF1EA);
