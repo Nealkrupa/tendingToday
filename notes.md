@@ -390,12 +390,14 @@ page since its live counts never arrived.
   block is active; **hidden entirely** otherwise, including while the pet is
   actively wandering (see below), since a held tool mid-stride doesn't make
   sense. Skin color has 4 free, on-theme colors plus 7 token-purchasable
-  colors across three price/flair tiers (Common/Uncommon/Rare, 5–40 tokens,
-  escalating from no flair to a shimmer glow), topped by a Rainbow option
-  that smoothly cycles through hues. Hat unlock status and the completionist
-  check are always computed live from current skill levels, never stored as
-  an earned flag — only which hat/skin color is currently *equipped* is
-  persisted, the same derive-don't-store approach used for life stage.
+  colors across four price/flair tiers (Common/Uncommon/Rare, 5–40 tokens,
+  escalating from no flair to a shimmer glow — visible on the equipped pet
+  itself, not just the picker), topped by an 80-token Legendary tier
+  (currently just the Rainbow option) that smoothly cycles through hues.
+  Hat unlock status and the completionist check are always computed live
+  from current skill levels, never stored as an earned flag — only which
+  hat/skin color is currently *equipped* is persisted, the same
+  derive-don't-store approach used for life stage.
 - **Tinting & smooth color-cycling:** body art ships as grayscale pixel art
   so each pet can have a user-chosen skin color; hat trims (grayscale) get
   their tier color from `achievements.js`'s existing `BADGE_PALETTES`

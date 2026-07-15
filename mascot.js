@@ -65,11 +65,11 @@
   const PREMIUM_SWATCHES = [
     { color: '#C97064', price: 5, flair: null, tierLabel: 'Common' },
     { color: '#5C6E78', price: 5, flair: null, tierLabel: 'Common' },
-    { color: '#8B6FA8', price: 18, flair: 'pulse', tierLabel: 'Uncommon' },
-    { color: '#3F7F73', price: 18, flair: 'pulse', tierLabel: 'Uncommon' },
+    { color: '#8B6FA8', price: 20, flair: 'pulse', tierLabel: 'Uncommon' },
+    { color: '#3F7F73', price: 20, flair: 'pulse', tierLabel: 'Uncommon' },
     { color: '#9B59B6', price: 40, flair: 'shimmer', tierLabel: 'Rare' },
     { color: '#2ECC71', price: 40, flair: 'shimmer', tierLabel: 'Rare' },
-    { color: RAINBOW_SKIN, price: 40, flair: 'rainbow', tierLabel: 'Rare' }
+    { color: RAINBOW_SKIN, price: 80, flair: 'rainbow', tierLabel: 'Legendary' }
   ];
   // Looks up a skin color's flair tier — used by renderSprite to decide
   // whether the *equipped* body itself gets a shimmer overlay, not just
@@ -902,6 +902,15 @@
       0%, 100% { filter: brightness(1); }
       50% { filter: brightness(1.35); }
     }
+    /* Same idea as the swatch pulse above but gentler (1.35 read as too
+       flashy sustained over a whole body art frame rather than an 18px
+       picker swatch) — applied to the equipped pet's body when an
+       Uncommon-tier color is active, not just the picker preview. */
+    .mascot-body-pulse { animation: mascot-body-pulse 2.2s ease-in-out infinite; }
+    @keyframes mascot-body-pulse {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.2); }
+    }
     .mascot-swatch-shimmer-sweep {
       position: absolute;
       top: -7px;
@@ -1478,16 +1487,22 @@
           style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;--mascot-prop-tx:${txPct}%;--mascot-prop-ty:${tyPct}%;transform:translate(${txPct}%, ${tyPct}%);animation-delay:${phaseDelay(1100)};" />`;
     }
 
+    const skinFlair = skinFlairFor(skinColor);
+    // Uncommon-tier ("pulse") colors get the same brightness-pulse the
+    // picker swatch uses, applied directly to the body image — previously
+    // this flair only showed up in the picker preview, never on the
+    // actually-equipped pet.
+    const bodyPulseClass = skinFlair === 'pulse' ? ' mascot-body-pulse' : '';
+    const bodyPulseDelay = skinFlair === 'pulse' ? `animation-delay:${phaseDelay(2200)};` : '';
     const bodyHtml = skinColor === RAINBOW_SKIN
       ? buildCyclingLayers(bodySrc, CYCLE_COLORS)
-      : `<img src="${getTintedImage(bodySrc, skinColor) || bodySrc}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />`;
+      : `<img class="${bodyPulseClass}" src="${getTintedImage(bodySrc, skinColor) || bodySrc}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;${bodyPulseDelay}" />`;
     // Rare-tier ("shimmer") and rainbow skin colors get the same
     // shimmer-bar highlight the completionist/max hats already use —
     // previously this flair only showed up on the picker's swatch preview,
     // never on the actually-equipped body, since the two used entirely
     // separate rendering paths. Masked to bodySrc's own alpha channel, same
     // mask-image + overflow:hidden clipping the hat version uses.
-    const skinFlair = skinFlairFor(skinColor);
     const bodyShimmerHtml = (skinFlair === 'shimmer' || skinFlair === 'rainbow')
       ? `<div class="mascot-tint-rect" style="-webkit-mask-image:url('${bodySrc}');mask-image:url('${bodySrc}');overflow:hidden;">
           <div class="mascot-shimmer-bar" style="background:rgba(255,255,255,0.85);animation-delay:${phaseDelay(2600)};"></div>

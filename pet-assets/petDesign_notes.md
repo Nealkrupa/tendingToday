@@ -1076,7 +1076,7 @@ completionist hat's shimmer.
   — an "orphaned" old color still renders correctly, it just won't show as
   selected in the picker until a new one is chosen; low-risk enough not to
   warrant a migration for a cosmetic-only change.
-- **Premium tier (7 entries across 3 price/flair tiers).**
+- **Premium tier (7 entries across 4 price/flair tiers).**
   `PREMIUM_SWATCHES` ([mascot.js:65](../mascot.js)) now carries
   `{ color, price, flair, tierLabel }` per entry instead of a flat 40-token
   list:
@@ -1084,9 +1084,9 @@ completionist hat's shimmer.
   | Tier | Price | Flair | Colors |
   |---|---|---|---|
   | Common | 5 | none | clay `#C97064`, slate `#5C6E78` |
-  | Uncommon | 18 | subtle glow pulse | plum `#8B6FA8`, teal `#3F7F73` |
+  | Uncommon | 20 | subtle glow pulse | plum `#8B6FA8`, teal `#3F7F73` |
   | Rare | 40 | shimmer pulse | amethyst `#9B59B6`, emerald `#2ECC71` |
-  | Rare | 40 | rainbow cycle | `rainbow` (sentinel `skinColor` value) |
+  | Legendary | 80 | rainbow cycle | `rainbow` (sentinel `skinColor` value) |
 
   Common reuses two more of the site's own page accents (continuing the
   original design's approach); Uncommon/Rare use two new colors each,
@@ -1245,3 +1245,45 @@ swatch never got the shimmer animation at all).
   just visually similar, the same hue. Inspected the rendered swatch
   markup directly and confirmed the Rare-tier and rainbow swatches all
   carry `.mascot-swatch-shimmer-sweep` in the DOM.
+
+## Flair-on-equipped-body fix + Legendary tier split (shipped)
+
+Two more follow-ups, both in `mascot.js`.
+
+- **Bug: Uncommon/Rare flair only ever showed on the picker's swatch
+  preview, never on the actually-equipped pet.** `renderSprite`'s body
+  branch only ever called `getTintedImage` (or `buildCyclingLayers` for
+  rainbow) — nothing there looked up `PREMIUM_SWATCHES` at all, so a pet
+  wearing a Rare-tier color rendered identically to one wearing a Common
+  color, and the "shimmer"/"pulse" flair only existed inside the
+  Customize panel's own markup. Fixed with a new `skinFlairFor(color)`
+  helper (looks up the matching `PREMIUM_SWATCHES` entry's `flair`) called
+  from `renderSprite`: Rare-tier and rainbow colors get the shimmer-bar
+  overlay described above (same masked-to-`bodySrc` technique, applied
+  directly to the equipped body rather than a swatch); Uncommon-tier
+  colors get a `filter: brightness()` pulse (`.mascot-body-pulse`, a
+  gentler 1.2× version of the picker swatch's 1.35× pulse — same intensity
+  read as too flashy sustained over a whole body sprite rather than an
+  18px picker dot) applied directly to the body `<img>`. Both use
+  `phaseDelay()` for the same reason every other repeatedly-recreated
+  animated element in this file does (see the swatch-picker stutter fix
+  above) — render() rebuilds the sprite on every idle tick, so a delay-less
+  `animation` would restart from frame 0 each time.
+- **Legendary tier split off from Rare, prices adjusted.** Uncommon rose
+  from 18 to 20 tokens; the rainbow entry split out of the Rare tier (was
+  40 tokens, sharing a tier label with the two static shimmer colors) into
+  its own **Legendary** tier at 80 tokens — it's the one skin option with
+  genuine ongoing motion (the color cycle itself), not just a static
+  color plus a highlight effect, so pricing and labeling it above Rare
+  reflects that it's doing something categorically flashier, not just
+  "one more Rare color." No code changes were needed beyond the
+  `PREMIUM_SWATCHES` data itself — the panel already groups swatches by
+  whatever `tierLabel` values are present, so a fourth distinct label
+  automatically gets its own price-labeled row.
+- **Verified in the offline devtools harness**: set an owned Uncommon
+  color as equipped and confirmed via `getComputedStyle` that the body
+  `<img>` carries `animation-name: mascot-body-pulse` with a live
+  `phaseDelay()`-derived delay (not `0s`). Inspected the rendered picker
+  markup and confirmed a standalone "Legendary (80🪙️)" group containing
+  only the rainbow swatch, separate from "Rare (40🪙️)"'s two static
+  colors.
