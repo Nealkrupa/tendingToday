@@ -1315,13 +1315,23 @@
         render();
       }, (e) => console.error('Mascot state subscription failed', e));
 
-      if (typeof window.subscribeAchievementCounts === 'function') {
-        window.subscribeAchievementCounts((counts) => {
-          popAfkForCountsDiff(counts);
-          widgetState.counts = counts;
-          render();
-        });
-      }
+      // Subscribes directly rather than going through achievements.js's
+      // window.subscribeAchievementCounts — that global only exists on pages
+      // that load achievements.js, which achievements.html itself doesn't
+      // (it reads/renders household/achievements-state inline instead of
+      // through that shared writer-side helper). Depending on it left the
+      // mascot widget's life stage and AFK-bank popups frozen on that one
+      // page, since widgetState.counts never got set there. mascot.js
+      // already reads this same doc directly elsewhere (see achievementsRef,
+      // used by the AFK/XP grant transaction above), so doing the live
+      // subscription the same way keeps the widget fully self-contained
+      // instead of depending on another script happening to be present.
+      achievementsRef().onSnapshot((snap) => {
+        const counts = (snap.exists ? snap.data() : {}).counts || {};
+        popAfkForCountsDiff(counts);
+        widgetState.counts = counts;
+        render();
+      }, (e) => console.error('Mascot achievement-counts subscription failed', e));
 
       // 2-frame idle animation, body only.
       setInterval(() => {

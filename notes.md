@@ -338,6 +338,16 @@ both are pure derivations off `household/achievements-state.counts` — the
 same lifetime completion total that already powers the Star Board. No new
 write hooks were needed anywhere else on the site.
 
+`mascot.js` subscribes to that doc directly (`achievementsRef().onSnapshot(...)`)
+rather than through `achievements.js`'s `window.subscribeAchievementCounts` —
+it already talks to that same doc directly elsewhere (the AFK/XP grant
+transaction), so doing the live read the same way keeps the widget truly
+self-contained. This used to be a real bug: `achievements.html` is the one
+page that doesn't load `achievements.js` (it reads/renders that doc inline
+instead), so `window.subscribeAchievementCounts` was undefined there, and
+the mascot widget's life stage and AFK-bank popups silently froze on that
+page since its live counts never arrived.
+
 - **Life stage (Fresh → In-Training → Rookie → Champion)** is shared by both
   pets and resets every month. It's driven by completions *since the start
   of the current month*: a stored baseline is diffed against the live
