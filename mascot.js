@@ -44,18 +44,33 @@
   // native size each individual tool sprite happens to be, making some
   // noticeably harder to read at a glance than others at a fixed icon size.
   const SKILL_EMOJI = { woodcutting: '🪓', gardening: '🪴', fishing: '🐟' };
-  const DEFAULT_SKIN_COLORS = { userA: '#8FB4D6', userB: '#E68A8F' };
-  const SWATCH_COLORS = ['#8FB4D6', '#E68A8F', '#A6C79A', '#F0C25A', '#BF9FD6', '#8A93A0', '#D98C4A', '#6B8E8E'];
-  // Purchasable skin colors (tokens, not free) — reuses four of the site's
-  // own page accent colors (slate/clay/plum/teal) as a small, thematic v1
-  // cosmetic catalog rather than inventing a new palette from scratch.
+  // Trailing U+FE0F forces emoji-style (colored) presentation rather than a
+  // monochrome/text-style glyph — some browser/OS font combos render 🪙
+  // without it as a flat outline instead of a gold coin. Single constant so
+  // every token amount in the widget renders identically.
+  const TOKEN_ICON = '🪙️';
+  // Free-tier swatches reuse the site's own core sage/blue/rose/gold accent
+  // colors — genuinely "green/blue/red/yellow" and on-theme by construction,
+  // rather than an arbitrary palette. Each pet's own default is one of these.
+  const DEFAULT_SKIN_COLORS = { userA: '#5B7B9A', userB: '#B4636F' };
+  const SWATCH_COLORS = ['#7C9075', '#5B7B9A', '#B4636F', '#C08A2E'];
+  const RAINBOW_SKIN = 'rainbow';
+  // Purchasable skin colors, priced/flaired in three escalating tiers (see
+  // petDesign_notes.md's color-tier section for the full rationale): Common
+  // reuses two more of the site's own page accents with no extra flair,
+  // Uncommon adds a subtle pulse glow, Rare adds a shimmer glow, and the
+  // peak Rare-priced Rainbow entry smooth-cycles through hues (same
+  // buildCyclingLayers technique used to fix the completionist hat's old
+  // discrete color jump — see renderSprite).
   const PREMIUM_SWATCHES = [
-    { color: '#5C6E78', price: 40 },
-    { color: '#C97064', price: 40 },
-    { color: '#8B6FA8', price: 40 },
-    { color: '#3F7F73', price: 40 }
+    { color: '#C97064', price: 5, flair: null, tierLabel: 'Common' },
+    { color: '#5C6E78', price: 5, flair: null, tierLabel: 'Common' },
+    { color: '#8B6FA8', price: 18, flair: 'pulse', tierLabel: 'Uncommon' },
+    { color: '#3F7F73', price: 18, flair: 'pulse', tierLabel: 'Uncommon' },
+    { color: '#9B59B6', price: 40, flair: 'shimmer', tierLabel: 'Rare' },
+    { color: '#2ECC71', price: 40, flair: 'shimmer', tierLabel: 'Rare' },
+    { color: RAINBOW_SKIN, price: 40, flair: 'rainbow', tierLabel: 'Rare' }
   ];
-
   const HAT_TIER_LEVELS = [25, 50, 75, 90]; // standard-hat unlock tiers (99 = bespoke max hat, handled separately)
 
   // ---------------------------------------------------------------------
@@ -86,6 +101,21 @@
   // Rough starting anchor (not yet worked through the way the tier/token
   // numbers were) — see the doc's "Still open" list.
   const UNIVERSAL_AFK_XP_PER_HOUR = 500;
+  // Smooth-color-cycle timing shared by the completionist hat and the
+  // rainbow skin (see buildCyclingLayers) — 12 layers at 750ms/slot means
+  // one full cycle every 9s, same overall speed as the original 6-layer
+  // version but with twice the color resolution for a smoother scroll.
+  const CYCLE_LAYERS = 12;
+  const CYCLE_SLOT_MS = 750;
+  const CYCLE_TOTAL_MS = CYCLE_LAYERS * CYCLE_SLOT_MS;
+  // 12 evenly-spaced (30° apart), fully-saturated hues — one shared array
+  // used by *both* the completionist hat's trim and the rainbow skin, so
+  // when a pet has both equipped they always show the identical color at
+  // the identical instant, not just the same cadence. (Previously the hat
+  // cycled through achievements.js's 6-color prestige badge palette while
+  // the skin cycled through a separate hand-picked rainbow set — same
+  // timing, but the actual colors never matched up.)
+  const CYCLE_COLORS = ['#DD4B4B', '#DD944B', '#DDDD4B', '#94DD4B', '#4BDD4B', '#4BDD94', '#4BDDDD', '#4B94DD', '#4B4BDD', '#944BDD', '#DD4BDD', '#DD4B94'];
   // How long the prop shows its "working" animation right after a direct
   // action grants XP — a lightweight "you just earned XP" flourish,
   // distinct from the floating "+N XP" popup.
@@ -208,12 +238,14 @@
       // tokens are always derived, never stored directly — see computeTokens.
       tokensBaseline: 0,   // liveTotal at last reset (pet creation, or the redesign migration)
       tokensSpent: 0,
-      lastGrantedCounts: {},  // per-key achievements-state.counts cursor, see runVisitGrant
+      // Per-key high-water mark of achievements-state.counts already
+      // granted for — see runVisitGrant and tierXpForKey.
+      lastGrantedCounts: {},
       activeSkill: 'woodcutting',
       skillXP: { woodcutting: 0, gardening: 0, fishing: 0 },
       equippedHat: null,
       purchasedSkinColors: [],  // hex codes owned beyond the free SWATCH_COLORS
-      skinColor: DEFAULT_SKIN_COLORS[petKey] || '#8FB4D6',
+      skinColor: DEFAULT_SKIN_COLORS[petKey] || '#5B7B9A',
       activeAfkBlock: null,     // or { hours, price, startedAt, xpGrantedSoFar }
       lastBlockGrantAt: null,
       lastActionGrantAt: null   // drives the post-action prop flourish
@@ -317,15 +349,35 @@
         let anyGrant = false;
 
         // Tiered per-action skill XP: diff live counts against this pet's
-        // own cursor. Only positive deltas grant (an un-check/un-add isn't
-        // a new action) — see tierXpForKey for the tier mapping.
+        // own per-key high-water mark. Only positive deltas grant (an
+        // un-check/un-add isn't a new action) — see tierXpForKey for the
+        // tier mapping.
+        //
+        // Deliberately a high-water mark, not just "the last value seen" —
+        // a plain last-seen cursor is farmable: check a task (count 0→1,
+        // grants), uncheck it (count 1→0, no grant, but the cursor also
+        // drops to 0), check it again (count 0→1 reads as a *fresh*
+        // positive delta from the now-lowered cursor, grants XP a second
+        // time for the same click). Tracking the highest value each key
+        // has ever reached (never lowered by an uncheck) closes this:
+        // re-checking back up to a value already reached and paid out for
+        // isn't a delta above the high-water mark, so it grants nothing,
+        // while a genuine new completion — the underlying achievements-state
+        // count climbing past its own all-time peak, e.g. tomorrow's
+        // instance of the same daily task — still grants normally. This
+        // mirrors the mascot's existing "skills never reset, only go up"
+        // philosophy at the grant-mechanism level, not just the stored
+        // total.
         const lastGrantedCounts = pet.lastGrantedCounts || {};
+        const newLastGrantedCounts = Object.assign({}, lastGrantedCounts);
         Object.keys(counts).forEach((key) => {
           const before = lastGrantedCounts[key] || 0;
           const after = counts[key] || 0;
-          if (after <= before) return;
-          skillXP[activeSkill] += (after - before) * tierXpForKey(key);
-          anyGrant = true;
+          if (after > before) {
+            skillXP[activeSkill] += (after - before) * tierXpForKey(key);
+            anyGrant = true;
+          }
+          newLastGrantedCounts[key] = Math.max(before, after);
         });
 
         // AFK block grant, if one's currently active — flat universal rate
@@ -359,7 +411,7 @@
         }
 
         pets[petKey] = Object.assign({}, pet, {
-          lastGrantedCounts: Object.assign({}, counts),
+          lastGrantedCounts: newLastGrantedCounts,
           activeSkill,
           skillXP,
           activeAfkBlock,
@@ -667,6 +719,30 @@
       height: 100px;
       animation: mascot-shimmer-sweep 2.6s ease-in-out infinite;
     }
+    /* Stacked crossfade layers (see buildCyclingLayers) — every layer
+       shares this one keyframe timeline and is staggered purely via
+       animation-delay, so only one @keyframes rule is needed regardless of
+       how many colors are in a given cycle. No flat "hold" plateau on
+       purpose: each layer ramps 0→1 over exactly one slot then 1→0 over
+       the next slot, so at every instant exactly two adjacent layers are
+       visible with perfectly complementary opacity (a+b=1) — a true
+       continuous linear crossfade between neighboring colors, like an RGB
+       light strip scrolling, rather than "hold on a color, then quickly
+       snap to the next." Peak (opacity 1) sits at exactly one slot-width
+       in, trough back at two slot-widths in. */
+    .mascot-cycle-layer {
+      opacity: 0;
+      animation-name: mascot-cycle-fade;
+      animation-duration: ${CYCLE_TOTAL_MS}ms;
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
+    }
+    @keyframes mascot-cycle-fade {
+      0% { opacity: 0; }
+      ${(100 / CYCLE_LAYERS).toFixed(3)}% { opacity: 1; }
+      ${(200 / CYCLE_LAYERS).toFixed(3)}% { opacity: 0; }
+      100% { opacity: 0; }
+    }
 
     /* XP popup — lives in its own fixed overlay layer (#mascot-fx-layer),
        not inside the sprite box itself, since that box's innerHTML gets
@@ -699,7 +775,7 @@
       font-size: 15px;
       color: var(--ink, #263029);
     }
-    .mascot-close-row { display: flex; justify-content: flex-end; }
+    .mascot-close-row { display: flex; justify-content: space-between; align-items: center; }
     .mascot-close-btn {
       background: none;
       border: none;
@@ -708,6 +784,36 @@
       cursor: pointer;
       padding: 2px 6px;
     }
+    /* Matches achievements.html's rank-ladder "?" toggle — same circular
+       outline-button treatment, reused here for a quick pet-widget primer. */
+    .mascot-help-toggle {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1.5px solid var(--line, #DDE3D6);
+      background: var(--bg, #EEF1EA);
+      color: var(--muted, #6B7568);
+      font-family: 'Fraunces', serif;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: border-color 0.15s ease, color 0.15s ease;
+    }
+    .mascot-help-toggle:hover { border-color: var(--gold, #C08A2E); color: var(--gold, #C08A2E); }
+    .mascot-help-note {
+      margin: 6px 0 10px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted, #6B7568);
+      font-style: italic;
+    }
+    .mascot-help-note ul { margin: 4px 0 0; padding-left: 18px; }
+    .mascot-help-note li { margin-bottom: 3px; }
     .mascot-bank-line {
       font-family: 'IBM Plex Mono', monospace;
       font-size: 12px;
@@ -765,11 +871,46 @@
     .mascot-hat-list { display: flex; flex-wrap: wrap; margin-top: 6px; }
     .mascot-swatch-row { display: flex; gap: 6px; margin-top: 8px; }
     .mascot-swatch {
+      position: relative;
       width: 18px; height: 18px; border-radius: 50%;
       border: 1.5px solid var(--line, #DDE3D6);
       cursor: pointer;
+      overflow: hidden;
     }
     .mascot-swatch.mascot-swatch-active { border-color: var(--ink, #263029); border-width: 2px; }
+    /* Escalating flair by premium tier. Both used to be an *outer*
+       box-shadow glow, which read as a stray halo (especially against a
+       dark-mode panel background) rather than a shimmer on the swatch
+       itself. Uncommon now gets a plain brightness pulse (no box-shadow at
+       all, so nothing can bleed outside the circle); Rare and the rainbow
+       skin get an inner diagonal sweep instead (.mascot-swatch-shimmer-sweep,
+       a child element clipped by this circle's own overflow:hidden) — same
+       sweep-clipped-to-silhouette technique the completionist hat's own
+       shimmer already uses, just scaled down to swatch size. */
+    .mascot-swatch-pulse { animation: mascot-swatch-pulse 2.2s ease-in-out infinite; }
+    @keyframes mascot-swatch-pulse {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.35); }
+    }
+    .mascot-swatch-shimmer-sweep {
+      position: absolute;
+      top: -7px;
+      left: -9px;
+      width: 4px;
+      height: 32px;
+      background: rgba(255,255,255,0.9);
+      animation: mascot-swatch-shimmer-sweep 1.8s ease-in-out infinite;
+    }
+    @keyframes mascot-swatch-shimmer-sweep {
+      0%   { transform: translateX(-6px) rotate(20deg); opacity: 0; }
+      15%  { opacity: 0.9; }
+      55%  { transform: translateX(24px) rotate(20deg); opacity: 0.9; }
+      70%  { transform: translateX(28px) rotate(20deg); opacity: 0; }
+      100% { transform: translateX(28px) rotate(20deg); opacity: 0; }
+    }
+    .mascot-swatch-rainbow {
+      background: conic-gradient(from 0deg, ${CYCLE_COLORS.join(', ')}, ${CYCLE_COLORS[0]});
+    }
     .mascot-swatch-locked {
       display: flex;
       align-items: center;
@@ -899,7 +1040,7 @@
     const layer = ensureFxLayer();
     const el = document.createElement('div');
     el.className = 'mascot-xp-popup';
-    el.textContent = '+' + tokens.toLocaleString() + ' 🪙';
+    el.textContent = '+' + tokens.toLocaleString() + ' ' + TOKEN_ICON;
     el.style.left = (rect.left + rect.width / 2) + 'px';
     el.style.top = rect.top + 'px';
     layer.appendChild(el);
@@ -981,6 +1122,27 @@
     return null;
   }
 
+  // Simulates smooth color-cycling using only cheap, pre-cached discrete
+  // tints. Genuine per-pixel hue interpolation isn't practical here: the
+  // source art is grayscale and recolored via canvas multiply-tint (see
+  // getTintedImage above), so CSS hue-rotate() has nothing to rotate, and
+  // re-tinting on every frame would blow the tint cache and likely lag.
+  // Instead this stacks one pre-tinted <img> per color, all sharing the same
+  // mascot-cycle-fade keyframes (fade in, hold, fade out, then stay hidden
+  // for the rest of the cycle) but phase-offset by one slot each via
+  // animation-delay — the codebase's existing negative-delay/Date.now()
+  // continuity trick (see phaseDelay above), extended to a multi-layer
+  // stagger. At any instant exactly one layer is at full opacity and its
+  // neighbor is fading in/out under it, reading as a smooth cycle even
+  // though every individual layer is a static, already-cached image.
+  function buildCyclingLayers(srcUrl, colors) {
+    return colors.map((color, i) => {
+      const tinted = getTintedImage(srcUrl, color) || srcUrl;
+      const delay = '-' + ((Date.now() + i * CYCLE_SLOT_MS) % CYCLE_TOTAL_MS) + 'ms';
+      return `<img src="${tinted}" class="mascot-cycle-layer" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;animation-delay:${delay};" />`;
+    }).join('');
+  }
+
   // Eagerly warms the tint cache for every body-frame + stock-swatch-color
   // combination. Without this, the *first* time any given (image, color)
   // pair is needed, getTintedImage() returns null for that render and the
@@ -994,6 +1156,13 @@
       [1, 2].forEach((frame) => {
         const src = assetUrl('pet-body-' + stage.key + '-' + frame + '.png');
         SWATCH_COLORS.forEach((color) => getTintedImage(src, color));
+        // Also warms every premium color (previously only free SWATCH_COLORS
+        // were precomputed, so a freshly-purchased premium color would flash
+        // the plain untinted art for one frame) and the rainbow cycle's own
+        // hues, so its crossfade layers are already cached the first time
+        // any pet equips it rather than fading in layer-by-layer.
+        PREMIUM_SWATCHES.forEach((s) => { if (s.color !== RAINBOW_SKIN) getTintedImage(src, s.color); });
+        CYCLE_COLORS.forEach((color) => getTintedImage(src, color));
       });
     });
   }
@@ -1012,7 +1181,7 @@
       getTintedImage(maxTrimUrl, paletteAt(4).edge);
     });
     const completionistTrimUrl = assetUrl('hat-completionist-trim.png');
-    for (let i = 0; i < 6; i++) getTintedImage(completionistTrimUrl, paletteAt(i).edge);
+    CYCLE_COLORS.forEach((color) => getTintedImage(completionistTrimUrl, color));
   }
 
   // ---------------------------------------------------------------------
@@ -1227,7 +1396,7 @@
 
   function renderSprite(container, pet, frame, isWalking) {
     const stage = pet.__stage;
-    const skinColor = pet.skinColor || '#8FB4D6';
+    const skinColor = pet.skinColor || '#5B7B9A';
     const bodySrc = assetUrl('pet-body-' + stage.key + '-' + frame + '.png');
 
     const bobPct = frame === 2 ? (stage.headBob / 64 * 100) : 0;
@@ -1238,29 +1407,41 @@
       const anchor = hat.anchor;
       const txPct = (stage.head.x - anchor.x) / 64 * 100;
       const tyPct = (stage.head.y - anchor.y) / 64 * 100 + bobPct;
-      let tintColor, shimmerHtml = '';
+      let trimHtml, shimmerHtml = '';
       if (hat.shimmer === 'completionist') {
-        const idx = Math.floor(Date.now() / 1500) % 6;
-        const pal = paletteAt(idx);
-        tintColor = pal.edge;
+        // Was a hard jump-cut every 1.5s (Math.floor(Date.now()/1500)%6
+        // picking a single discrete tint) — now crossfades continuously
+        // through CYCLE_COLORS via buildCyclingLayers instead. Uses the
+        // same shared CYCLE_COLORS (and the same wall-clock phase) as the
+        // rainbow skin, so a pet with both equipped always shows matching
+        // colors at matching instants, not just matching cadence.
+        trimHtml = buildCyclingLayers(hat.trim, CYCLE_COLORS);
+        // The thin shimmer streak stays a flat CSS background-color (can't
+        // crossfade pixel-by-pixel like the trim above), so it's just a
+        // constant soft white highlight rather than trying to track the
+        // cycling hue — a secondary highlight, not the primary color read.
         shimmerHtml = `<div class="mascot-tint-rect" style="-webkit-mask-image:url('${hat.trim}');mask-image:url('${hat.trim}');overflow:hidden;">
-          <div class="mascot-shimmer-bar" style="background:${pal.shimmer};animation-delay:${phaseDelay(2600)};"></div>
-        </div>`;
-      } else if (hat.shimmer === 'max') {
-        const pal = paletteAt(4); // dedicated max-tier color (Amethyst)
-        tintColor = pal.edge;
-        shimmerHtml = `<div class="mascot-tint-rect" style="-webkit-mask-image:url('${hat.trim}');mask-image:url('${hat.trim}');overflow:hidden;">
-          <div class="mascot-shimmer-bar" style="background:${pal.shimmer};animation-delay:${phaseDelay(2600)};"></div>
+          <div class="mascot-shimmer-bar" style="background:rgba(255,255,255,0.85);animation-delay:${phaseDelay(2600)};"></div>
         </div>`;
       } else {
-        const pal = paletteAt(hat.tierIndex || 0);
-        tintColor = pal.edge;
+        let tintColor;
+        if (hat.shimmer === 'max') {
+          const pal = paletteAt(4); // dedicated max-tier color (Amethyst)
+          tintColor = pal.edge;
+          shimmerHtml = `<div class="mascot-tint-rect" style="-webkit-mask-image:url('${hat.trim}');mask-image:url('${hat.trim}');overflow:hidden;">
+            <div class="mascot-shimmer-bar" style="background:${pal.shimmer};animation-delay:${phaseDelay(2600)};"></div>
+          </div>`;
+        } else {
+          const pal = paletteAt(hat.tierIndex || 0);
+          tintColor = pal.edge;
+        }
+        const trimTinted = getTintedImage(hat.trim, tintColor) || hat.trim;
+        trimHtml = `<img src="${trimTinted}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />`;
       }
-      const trimTinted = getTintedImage(hat.trim, tintColor) || hat.trim;
       hatHtml = `
         <div style="position:absolute;inset:0;transform:translate(${txPct}%, ${tyPct}%);">
           <img src="${hat.base}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />
-          <img src="${trimTinted}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />
+          ${trimHtml}
           ${shimmerHtml}
         </div>`;
     }
@@ -1287,10 +1468,12 @@
           style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;--mascot-prop-tx:${txPct}%;--mascot-prop-ty:${tyPct}%;transform:translate(${txPct}%, ${tyPct}%);animation-delay:${phaseDelay(1100)};" />`;
     }
 
-    const bodyTinted = getTintedImage(bodySrc, skinColor) || bodySrc;
+    const bodyHtml = skinColor === RAINBOW_SKIN
+      ? buildCyclingLayers(bodySrc, CYCLE_COLORS)
+      : `<img src="${getTintedImage(bodySrc, skinColor) || bodySrc}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />`;
     container.innerHTML = `
       ${propHtml}
-      <img src="${bodyTinted}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />
+      ${bodyHtml}
       ${hatHtml}
     `;
   }
@@ -1305,6 +1488,7 @@
     expandedPet: null,      // null | 'userA' | 'userB'
     expandedSkill: null,    // null | skill name (Level 2)
     customizeOpen: false,   // whether the hat/skin-color pickers are expanded
+    helpOpen: false,        // whether the "?" quick-help note is expanded
     frame: 1,
     prevSkillXP: null,      // last-seen { userA: {skill: hours, ...}, userB: {...} }, for XP-popup diffing
     seededXP: false,        // true once prevSkillXP holds a real first snapshot (skips popping on that first one)
@@ -1425,7 +1609,7 @@
         } else {
           const blockButtons = TOKEN_BLOCKS.map((b, i) => {
             const afford = pet.__tokens >= b.price;
-            return `<button class="mascot-afk-btn" data-block="${i}" ${afford ? '' : 'disabled'}>${b.hours}h — ${b.price}🪙</button>`;
+            return `<button class="mascot-afk-btn" data-block="${i}" ${afford ? '' : 'disabled'}>${b.hours}h — ${b.price}${TOKEN_ICON}</button>`;
           }).join('');
           afkHtml = `<div class="mascot-xp-line">Buy AFK time (tool works on its own for a while):</div><div class="mascot-afk-row">${blockButtons}</div>`;
         }
@@ -1440,12 +1624,37 @@
             .join('');
           const freeSwatchesHtml = SWATCH_COLORS.map((c) => `<div class="mascot-swatch${pet.skinColor === c ? ' mascot-swatch-active' : ''}" data-color="${c}" style="background:${c};"></div>`).join('');
           const ownedPremium = pet.purchasedSkinColors || [];
-          const premiumSwatchesHtml = PREMIUM_SWATCHES.map((s) => {
-            if (ownedPremium.indexOf(s.color) !== -1) {
-              return `<div class="mascot-swatch${pet.skinColor === s.color ? ' mascot-swatch-active' : ''}" data-color="${s.color}" style="background:${s.color};"></div>`;
+          // Group premium swatches by tier (Common/Uncommon/Rare) — the
+          // array is already ordered by tier, so a simple running-group
+          // reduce keeps each tier's own price + flair together for display
+          // rather than one flat "Premium" row.
+          const tierGroups = [];
+          PREMIUM_SWATCHES.forEach((s) => {
+            let group = tierGroups[tierGroups.length - 1];
+            if (!group || group.label !== s.tierLabel) {
+              group = { label: s.tierLabel, price: s.price, items: [] };
+              tierGroups.push(group);
             }
-            const afford = pet.__tokens >= s.price;
-            return `<div class="mascot-swatch mascot-swatch-locked" data-buy-color="${s.color}" data-buy-price="${s.price}" style="background:${s.color};opacity:${afford ? '0.85' : '0.35'};" title="${s.price} tokens">${s.price}</div>`;
+            group.items.push(s);
+          });
+          const premiumTiersHtml = tierGroups.map((g) => {
+            const swatchesHtml = g.items.map((s) => {
+              const isRainbow = s.color === RAINBOW_SKIN;
+              // 'rainbow' gets both its own gradient class *and* the
+              // shimmer sweep (it's the peak-tier option — previously it
+              // only got the gradient, with no shimmer at all, since this
+              // mapped flair name straight to a single class name).
+              const hasShimmerSweep = s.flair === 'shimmer' || isRainbow;
+              const flairClass = (s.flair === 'pulse' ? ' mascot-swatch-pulse' : '') + (isRainbow ? ' mascot-swatch-rainbow' : '');
+              const sweepHtml = hasShimmerSweep ? '<div class="mascot-swatch-shimmer-sweep"></div>' : '';
+              const bgStyle = isRainbow ? '' : `background:${s.color};`;
+              if (ownedPremium.indexOf(s.color) !== -1) {
+                return `<div class="mascot-swatch${flairClass}${pet.skinColor === s.color ? ' mascot-swatch-active' : ''}" data-color="${s.color}" style="${bgStyle}">${sweepHtml}</div>`;
+              }
+              const afford = pet.__tokens >= s.price;
+              return `<div class="mascot-swatch mascot-swatch-locked${flairClass}" data-buy-color="${s.color}" data-buy-price="${s.price}" style="${bgStyle}opacity:${afford ? '0.85' : '0.35'};" title="${s.price} tokens">${sweepHtml}${s.price}</div>`;
+            }).join('');
+            return `<div class="mascot-xp-line" style="margin-top:6px;">${g.label} (${g.price}${TOKEN_ICON}):</div><div class="mascot-swatch-row">${swatchesHtml}</div>`;
           }).join('');
           customizeBody = `
             <div style="margin-top:8px;">
@@ -1453,8 +1662,7 @@
               <div class="mascot-hat-list">${hatButtons}</div>
               <div class="mascot-xp-line" style="margin-top:8px;">Skin color:</div>
               <div class="mascot-swatch-row">${freeSwatchesHtml}</div>
-              <div class="mascot-xp-line" style="margin-top:6px;">Premium (tokens):</div>
-              <div class="mascot-swatch-row">${premiumSwatchesHtml}</div>
+              ${premiumTiersHtml}
             </div>`;
         }
         ownControlsHtml = `
@@ -1469,14 +1677,29 @@
           </div>`;
       }
 
+      const helpOpen = !!widgetState.helpOpen;
+      const helpNoteHtml = helpOpen ? `
+        <div class="mascot-help-note">
+          <ul>
+            <li>Checking off tasks anywhere on the site feeds your pet's active skill — pick which one trains in the row below.</li>
+            <li>Every tracked action also earns ${TOKEN_ICON} tokens, spendable on AFK time (the tool works on its own for a while) or new skin colors.</li>
+            <li>Hats unlock automatically as a skill levels up — tap one to equip it.</li>
+          </ul>
+        </div>` : '';
+
       panel.innerHTML = `
-        <div class="mascot-close-row"><button class="mascot-close-btn" id="mascot-close-btn">✕</button></div>
+        <div class="mascot-close-row">
+          <button class="mascot-help-toggle" type="button" id="mascot-help-toggle" aria-label="${helpOpen ? 'Hide' : 'Show'} pet help">${helpOpen ? '×' : '?'}</button>
+          <button class="mascot-close-btn" id="mascot-close-btn">✕</button>
+        </div>
         <h4>${labelForPet(petKey)}'s pet — ${pet.__stage.label}</h4>
-        <div class="mascot-bank-line">🪙 ${Math.floor(pet.__tokens).toLocaleString()} tokens</div>
+        ${helpNoteHtml}
+        <div class="mascot-bank-line">${TOKEN_ICON} ${Math.floor(pet.__tokens).toLocaleString()} tokens</div>
         <div class="mascot-pill-row">${pillsHtml}</div>
         ${ownControlsHtml}
       `;
       document.getElementById('mascot-close-btn').addEventListener('click', () => { widgetState.expandedPet = null; render(); });
+      document.getElementById('mascot-help-toggle').addEventListener('click', () => { widgetState.helpOpen = !widgetState.helpOpen; render(); });
       panel.querySelectorAll('.mascot-pill:not(.mascot-customize-toggle)').forEach((el) => {
         el.addEventListener('click', () => { widgetState.expandedSkill = el.getAttribute('data-skill'); render(); });
       });
@@ -1519,7 +1742,7 @@
       }
 
       panel.innerHTML = `
-        <div class="mascot-close-row"><button class="mascot-close-btn" id="mascot-close-btn">✕</button></div>
+        <div class="mascot-close-row" style="justify-content:flex-end;"><button class="mascot-close-btn" id="mascot-close-btn">✕</button></div>
         <button class="mascot-back-btn" id="mascot-back-btn">‹ Back to skills</button>
         <div class="mascot-skill-detail">
           <h4>${SKILL_EMOJI[skill]} ${SKILL_LABELS[skill]} — Level ${level}</h4>
@@ -1592,8 +1815,8 @@
 
   function hatLabel(h) {
     if (h.kind === 'completionist') return 'Completionist';
-    if (h.kind === 'max') return SKILL_LABELS[h.skill] + ' (Master)';
-    return SKILL_LABELS[h.skill] + ' ' + h.tier;
+    if (h.kind === 'max') return SKILL_EMOJI[h.skill] + ' (Master)';
+    return SKILL_EMOJI[h.skill] + ' ' + h.tier;
   }
 
   // "Xh Ym left" for an active AFK block's remaining wall-clock duration.

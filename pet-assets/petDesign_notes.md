@@ -1,4 +1,4 @@
-# Household Mascot — Design Notes (in theory, not yet built)
+# Household Mascot — Design Notes (shipped)
 
 A persistent widget-level pet, separate from the existing "pet upkeep" feature on
 Tending Today (`pet:brush`). Lives at the bottom of the screen on every household
@@ -49,6 +49,13 @@ Four stages: **Fresh → In-Training → Rookie → Champion**.
     off an estimate, not observed history yet.
 
 ### 2. Skill levels (permanent, idle-time driven)
+
+> **Superseded.** Everything below in this subsection (the AFK-hour bank,
+> `hoursAlreadyGranted`, the 15hr/day cap, the ×1000 displayed-XP scaling)
+> describes the *original* design and no longer matches what's live — kept
+> here only for historical rationale (the XP curve math it derives is still
+> accurate). See "Progression system redesign (shipped)" further down for
+> the tiered-XP + token system that actually shipped and replaced this.
 
 Three skills to start: **Woodcutting, Gardening, Fishing**. User can only set
 *which* skill is active — no other input. XP accrues passively based on real
@@ -829,17 +836,9 @@ the sole XP pipeline. New shape:
   - **Cosmetics — v1 scope is skin colors only.** Tool skins and hat
     variants are explicitly out of scope for this redesign, revisited
     later once the token-purchase pattern is proven with something small.
-    Shipped as `PREMIUM_SWATCHES` ([mascot.js:52](../mascot.js)): four new
-    colors at 40 tokens each, reusing four of the site's own page accent
-    colors (slate `#5C6E78`, clay `#C97064`, plum `#8B6FA8`, teal
-    `#3F7F73`) as a small, thematic catalog rather than inventing a new
-    palette — sits alongside the existing 8 free `SWATCH_COLORS`
-    ([mascot.js:48](../mascot.js)). Reuses 100% of the existing tint
-    infrastructure (`getTintedImage`); adds a per-pet
-    `purchasedSkinColors: string[]` field (hex codes owned beyond the free
-    set) and an unlock check in the swatch picker UI (a locked swatch shows
-    its token price instead of being selectable, dimmed further if
-    unaffordable).
+    Shipped as `PREMIUM_SWATCHES` ([mascot.js:65](../mascot.js)), later
+    reworked into a full color-tier system — see "Skin color tiers &
+    smooth color-cycling" below for the current shape.
   - **Purchasable AFK-time blocks, on a discount curve.** Four fixed block
     sizes — 1hr / 2hr / 5hr / 10hr — priced off a 5-tokens-per-hour base
     rate, with the discount growing from 0% at the 1hr block up to 30% at
@@ -917,7 +916,7 @@ pets: {
     activeSkill: 'woodcutting',
     skillXP: { woodcutting: 12345000, gardening: 0, fishing: 6200000 },  // raw XP, not hours
     equippedHat: 'woodcutting-25',
-    purchasedSkinColors: [],   // hex codes owned beyond the free 8 SWATCH_COLORS
+    purchasedSkinColors: [],   // hex codes (or 'rainbow') owned beyond the free 4 SWATCH_COLORS
 
     activeAfkBlock: null,      // or { hours: 10, startedAt: <ts>, xpGrantedSoFar: 0 }
     lastBlockGrantAt: null,
@@ -938,9 +937,9 @@ this diffing wouldn't have been reliable on every page anyway). On each
 incoming snapshot, compare against `lastGrantedCounts`: for every key whose
 count went up, look up that key's tier (Quick/Standard/Perfect-day, see
 table above), multiply by the delta, credit the total to `activeSkill`,
-then advance `lastGrantedCounts` to the new snapshot. Two things fall out
-of this for free, which is why it beats adding a write hook to every page's
-own click handler:
+then advance `lastGrantedCounts`. Two things fall out of this for free,
+which is why it beats adding a write hook to every page's own click
+handler:
 - **No new write hooks anywhere else on the site** — same rule this whole
   design has followed throughout. Every other page keeps calling
   `recordAchievement()` exactly as it does today; mascot.js is the only
@@ -949,6 +948,29 @@ own click handler:
   positive delta also sets `lastActionGrantAt = now`, which is exactly the
   "just earned XP" trigger the prop's working state needs. A write-hook
   approach would need a second, separate signal just for this.
+
+**`lastGrantedCounts` is a per-key high-water mark, not just "the last
+value seen" — this closes a real farming exploit, not a hypothetical one.**
+A plain last-seen cursor is spammable: check a task (count 0→1, grants
+125 XP), uncheck it (count 1→0 — `recordAchievement`'s own -1 delta is
+normal, expected behavior everywhere else on the site, "mis-clicks
+self-correct" — but naively advancing the cursor to match would drop it
+back to 0), check it again (count 0→1 now reads as a *fresh* positive
+delta from the lowered cursor, grants another 125 for the same click).
+Repeat indefinitely for unlimited XP. The fix: `lastGrantedCounts[key]`
+only ever moves up (`Math.max(before, after)` on every write, never a bare
+overwrite), so re-checking back up to a value already reached and paid out
+for isn't a delta above the high-water mark and grants nothing — while a
+genuine new completion (the underlying lifetime count climbing past its
+own all-time peak, e.g. tomorrow's instance of the same daily task, which
+increments the same counter further since it never resets) still grants
+normally, since that's a real excursion past the mark. This is the same
+"skills never reset, only go up" philosophy the rest of this design already
+follows, just applied to the grant mechanism itself and not only the
+stored total. Verified directly: a check→uncheck→check→uncheck→check
+sequence against an established pet granted exactly once (125 XP), and a
+subsequent genuine new peak (count reaching a value never seen before)
+still granted normally on top of that.
 
 Tokens don't need the per-key diffing above — they're not tiered, every
 action is worth the same 1 token — but they do still need a baseline, same
@@ -1000,7 +1022,7 @@ choosing the simpler option while nothing's shipped yet:
 **Tokens (and `skillXP`) persist through the monthly reset — only the body
 (life stage) runs on a monthly cycle.** The monthly rollover only ever
 touches `baselineTotal`/`monthKey` (life stage's own baseline pair,
-[mascot.js:268-273](../mascot.js)); it never resets `liveTotal` itself,
+[mascot.js:301-304](../mascot.js)); it never resets `liveTotal` itself,
 which is the *all-time* `achievements-state` sum. Since both `tokens`
 (`liveTotal - tokensBaseline - tokensSpent`) and `skillXP` derive from that
 same all-time total, they keep accumulating across month boundaries
@@ -1035,3 +1057,191 @@ which axis (permanent skills/currency vs. monthly body) is asking.
   rather than picked independently.
 - Post-action "just earned XP" working flourish duration: confirmed at
   2–3 seconds.
+
+## Skin color tiers & smooth color-cycling (shipped)
+
+Reworks the flat "8 free + 4 premium, all 40 tokens" skin-color catalog
+from the redesign above into an escalating-price/escalating-flair tier
+system, and fixes a real rendering bug uncovered along the way in the
+completionist hat's shimmer.
+
+- **Free tier (4 colors) — on-theme by construction.** `SWATCH_COLORS`
+  ([mascot.js:56](../mascot.js)) shrank from 8 arbitrary colors to 4,
+  reusing the site's own core sage/blue/rose/gold accent colors (`#7C9075`
+  / `#5B7B9A` / `#B4636F` / `#C08A2E`) rather than an invented palette —
+  genuinely "green/blue/red/yellow" and guaranteed to match the site's own
+  look. `DEFAULT_SKIN_COLORS` ([mascot.js:55](../mascot.js)) now assigns
+  each pet one of these (blue for userA, rose for userB) instead of the old
+  ad hoc defaults. Existing pets' current `skinColor` isn't force-migrated
+  — an "orphaned" old color still renders correctly, it just won't show as
+  selected in the picker until a new one is chosen; low-risk enough not to
+  warrant a migration for a cosmetic-only change.
+- **Premium tier (7 entries across 3 price/flair tiers).**
+  `PREMIUM_SWATCHES` ([mascot.js:65](../mascot.js)) now carries
+  `{ color, price, flair, tierLabel }` per entry instead of a flat 40-token
+  list:
+
+  | Tier | Price | Flair | Colors |
+  |---|---|---|---|
+  | Common | 5 | none | clay `#C97064`, slate `#5C6E78` |
+  | Uncommon | 18 | subtle glow pulse | plum `#8B6FA8`, teal `#3F7F73` |
+  | Rare | 40 | shimmer pulse | amethyst `#9B59B6`, emerald `#2ECC71` |
+  | Rare | 40 | rainbow cycle | `rainbow` (sentinel `skinColor` value) |
+
+  Common reuses two more of the site's own page accents (continuing the
+  original design's approach); Uncommon/Rare use two new colors each,
+  picked deliberately distinct from `paletteAt()`'s badge-prestige colors —
+  skin color is a cosmetic choice, badge palettes are an earned-skill-tier
+  signal, and conflating the two would blur what a viewer is actually
+  looking at. The panel groups swatches by `tierLabel` (Common/Uncommon/
+  Rare, each with its own price line) instead of one flat "Premium" row.
+  Flair is CSS on the swatch itself — Uncommon's pulse is a `filter:
+  brightness()` keyframe animation on the swatch (`.mascot-swatch-pulse`);
+  Rare's shimmer (and the rainbow swatch) is a small absolutely-positioned
+  child bar clipped by the swatch's own circular `overflow: hidden`
+  (`.mascot-swatch-shimmer-sweep`), the same sweep-clipped-to-silhouette
+  technique the completionist hat's own shimmer uses, scaled down. An
+  earlier version used an *outer* `box-shadow` glow for both tiers, which
+  read as a stray halo rather than a shimmer — especially against a
+  dark-mode panel background — and, due to a copy-paste-shaped bug, never
+  actually applied to the rainbow swatch at all (its flair name mapped to
+  a CSS class that only ever defined the gradient background, not the
+  shimmer animation). Both are fixed now: the sweep is contained entirely
+  inside the circle in both themes, and the rainbow swatch gets it too.
+  This is the in-picker preview only, not the equipped pet's own
+  rendering, which reads from the color/cycle logic below.
+- **Bug fix: completionist hat's color cycle was a hard jump-cut, not
+  smooth.** The original code picked a single discrete tint every 1.5s
+  (`Math.floor(Date.now()/1500)%6`, indexing into the same 6-color
+  prestige cycle `paletteAt()` already uses for badges) — every 1.5s the
+  hat's trim color would visibly snap to the next color with no
+  transition. Root cause: the trim recolor is a canvas multiply-tint
+  (`getTintedImage`, since the source art is grayscale and CSS
+  `hue-rotate()` has nothing to rotate on grayscale pixels), which only
+  ever produces static, discrete images — there's no native way to
+  interpolate between two canvas-tinted PNGs.
+- **Fix technique: stacked crossfade layers (`buildCyclingLayers`,
+  [mascot.js](../mascot.js)).** Rather than genuinely interpolating pixel
+  colors (would mean re-tinting on nearly every animation frame — cache-
+  blowing and likely laggy), the fix stacks one pre-tinted `<img>` per
+  color in the cycle, all sharing one `@keyframes mascot-cycle-fade` rule,
+  phase-offset by one slot each via `animation-delay` — the same
+  negative-delay/`Date.now()`-based continuity trick `phaseDelay()`
+  already uses elsewhere in the file, extended from one layer to N. No
+  per-frame canvas work, no new caching strategy needed (`getTintedImage`'s
+  existing cache just gets warmed for `CYCLE_LAYERS` colors instead of 1).
+  **Revised after initial shipping** (see "Rainbow smoothing + hat/skin
+  color sync" below) to remove the flat "hold" plateau the first version
+  had, so it's now a true continuous linear crossfade rather than
+  hold-then-snap. The max-skill hat's shimmer (a single fixed Amethyst
+  tint, never time-based) was untouched by any of this — it had no
+  discrete-jump bug to fix.
+- **Rainbow skin reuses the same fix.** `pet.skinColor === 'rainbow'` is a
+  sentinel value (`RAINBOW_SKIN`, [mascot.js:57](../mascot.js)) checked in
+  `renderSprite`'s body-rendering branch — when set, the body renders via
+  `buildCyclingLayers` instead of a single `getTintedImage` call. Same
+  cycle timing and (as of the revision below) same color source as the
+  completionist hat, no separate code path. `precomputeBodyTints` extends
+  to warm the tint cache for all `PREMIUM_SWATCHES` colors and all cycle
+  colors up front (previously only the free `SWATCH_COLORS` were
+  precomputed — a pre-existing gap, not introduced by this change, that
+  would have flashed the plain untinted body for one frame the first time
+  any premium color was actually equipped).
+- **Verified in the offline devtools harness**
+  ([mascot-devtools.html](../mascot-devtools.html)): set a pet's skillXP to
+  max on all three skills, equipped `completionist`, set `skinColor` to
+  `rainbow` via the (now free-text, not `<input type="color">` — that
+  input type can't hold a non-hex sentinel) skin-color field, and confirmed
+  both the hat trim and the body visibly cycle through colors smoothly
+  rather than jump-cutting. Purchased the rainbow swatch through the real
+  UI (`purchaseSkinColor`) and confirmed `purchasedSkinColors` and
+  `tokensSpent` updated correctly in the mock Firestore doc — no changes
+  needed to the purchase/grant transaction logic itself, since it already
+  treated skin colors as opaque strings.
+
+## Rainbow smoothing + hat/skin color sync (shipped)
+
+Three follow-up refinements to the color-tier work above, all in
+`mascot.js`, prompted by using the shipped feature: the completionist hat
+and rainbow skin didn't actually show matching colors when both were
+equipped (only matching *cadence*), the rainbow cycle read as a series of
+named colors with a quick snap between them rather than a smooth scroll,
+and the Rare-tier swatch flair had both a cosmetic problem (outer glow
+looked like a stray halo in dark mode) and an actual bug (the rainbow
+swatch never got the shimmer animation at all).
+
+- **One shared color array, not two.** Before this, the completionist hat
+  cycled through `paletteAt()`'s 6-color badge-prestige palette (gold →
+  crimson → verdant → azure → amethyst → obsidian) while the rainbow skin
+  cycled through a separate hand-picked 6-hue set — both used identical
+  timing constants and the same wall-clock phase anchor, so they were
+  always in *lockstep* (same layer index active at the same instant), but
+  since the two arrays held different color values, a pet with both
+  equipped never actually showed the same color on its hat and body at the
+  same time, even though the animations were technically synchronized.
+  Fixed by deleting `RAINBOW_CYCLE_COLORS` and the hat's `paletteAt(i)`
+  loop in favor of one shared `CYCLE_COLORS` constant
+  ([mascot.js:118](../mascot.js)), used by both `buildCyclingLayers` calls.
+  Since `getTintedImage`'s cache key is `srcUrl|color`, the same color
+  values naturally still produce independently-tinted images for the hat
+  trim vs. the body art — no cache collision, just a shared color list.
+  This is a deliberate reversal of this doc's own earlier "distinct from
+  paletteAt() on purpose" rationale for the rainbow skin (still true for
+  the Common/Uncommon/Rare *static* colors, which are unaffected) — once
+  synchronization was the explicit goal, sharing one array was the only
+  way to guarantee it by construction rather than by coincidence of two
+  arrays happening to stay the same length.
+- **12 evenly-spaced hues instead of 6.** `CYCLE_COLORS` is generated at
+  30° steps around the full hue wheel (`hslToHex(h, 68%, 58%)` for
+  `h = 0, 30, 60, ..., 330`) rather than hand-picked named colors — genuine
+  full-saturation "RGB lighting" hues (red, orange, yellow, chartreuse,
+  green, spring green, cyan, azure, blue, violet, magenta, pink) with no
+  low-saturation or near-black outliers (the old badge palette's Obsidian
+  entry was near-black, which would have read as a jarring dip in an
+  RGB-strip-style scroll). `CYCLE_LAYERS` doubled from 6 to 12 and
+  `CYCLE_SLOT_MS` halved from 1500 to 750, keeping the same 9-second total
+  cycle length while doubling the color resolution.
+- **Continuous linear crossfade, no hold plateau.** The original
+  `@keyframes mascot-cycle-fade` faded a layer in over `CYCLE_FADE_MS`
+  (400ms), held it at full opacity for the rest of its slot, then faded
+  out — meaning most of each slot showed one static color with only a
+  brief transition at the boundary, which read as discrete named colors
+  rather than a scroll. `CYCLE_FADE_MS` is gone entirely; each layer now
+  ramps `0% → 1` linearly over exactly one slot-width and `1 → 0` linearly
+  over the next slot-width (keyframe stops at `0%`, `100/CYCLE_LAYERS%`,
+  `200/CYCLE_LAYERS%`, `100%`), with no flat region at all. Because every
+  layer shares this identical triangular shape just phase-shifted by one
+  slot from its neighbors, the rising edge of one layer and the falling
+  edge of the adjacent layer occupy the exact same real-time window with
+  equal-and-opposite linear slopes — their opacities sum to a constant 1
+  throughout the overlap, which is the standard definition of a true
+  linear crossfade (the same math a physical two-channel audio crossfader
+  or an RGB LED strip's smooth-scroll mode uses), not an approximation of
+  one.
+- **Swatch flair: outer glow → inner effects, plus a real missing-shimmer
+  bug fix.** The Uncommon tier's "pulse" and Rare tier's "shimmer" were
+  both an *outer* `box-shadow` glow — visually read as a stray halo rather
+  than a shimmer, and looked especially off in dark mode where a white
+  halo has much more contrast against the panel's dark background than it
+  does in light mode. Pulse is now a `filter: brightness()` keyframe
+  animation on the swatch itself (no box-shadow, nothing can bleed outside
+  the circle). Shimmer is now a genuine inner sweep: `.mascot-swatch` grew
+  `position: relative; overflow: hidden`, and a small diagonal
+  `.mascot-swatch-shimmer-sweep` child bar sweeps across, clipped to the
+  circle — the same sweep-clipped-to-silhouette technique the
+  completionist hat's own shimmer bar already used, just scaled to swatch
+  size. Separately, a real bug: the flair-to-class mapping was
+  `s.flair ? 'mascot-swatch-' + s.flair : ''`, so the `rainbow` flair value
+  produced class `mascot-swatch-rainbow` — which only ever defined the
+  conic-gradient background, never the shimmer animation. The peak-tier
+  rainbow swatch had *no* animated flair at all, despite being priced and
+  positioned as the top option. Fixed by giving any swatch with
+  `flair === 'shimmer' || color === RAINBOW_SKIN` both the gradient class
+  (rainbow only) and the sweep child.
+- **Verified in the offline devtools harness**: with `completionist`
+  equipped and `skinColor: 'rainbow'`, screenshotted the pet twice a few
+  seconds apart and confirmed the hat trim and body always showed the same
+  color as each other at both moments (teal+teal, then pink+pink) — not
+  just visually similar, the same hue. Inspected the rendered swatch
+  markup directly and confirmed the Rare-tier and rainbow swatches all
+  carry `.mascot-swatch-shimmer-sweep` in the DOM.

@@ -359,7 +359,7 @@
 </script>
 
 <script src="achievements.js?v=5"></script>
-<script src="mascot.js?v=33"></script>
+<script src="mascot.js?v=37"></script>
 
 <script>
 (function () {
@@ -451,7 +451,7 @@
       skillXP: { woodcutting: 0, gardening: 0, fishing: 0 },
       equippedHat: null,
       purchasedSkinColors: [],
-      skinColor: '#8FB4D6',
+      skinColor: '#5B7B9A',
       activeAfkBlock: null,
       lastBlockGrantAt: null,
       lastActionGrantAt: null
@@ -475,7 +475,7 @@
       const blockActive = !!pet.activeAfkBlock;
       block.innerHTML =
         '<h3>' + PET_NAMES[petKey] + ' (' + petKey + ')</h3>' +
-        '<div class="row"><label>🪙 Tokens (computed)</label><strong>' + computeTokens(pet).toLocaleString() + '</strong></div>' +
+        '<div class="row"><label>🪙️ Tokens (computed)</label><strong>' + computeTokens(pet).toLocaleString() + '</strong></div>' +
         '<div class="row"><label>Tokens baseline</label><input type="number" step="1" data-field="tokensBaseline" data-pet="' + petKey + '" value="' + pet.tokensBaseline + '"></div>' +
         '<div class="row"><label>Tokens spent</label><input type="number" step="1" data-field="tokensSpent" data-pet="' + petKey + '" value="' + pet.tokensSpent + '"></div>' +
         '<div class="row"><label>Active skill</label><select data-field="activeSkill" data-pet="' + petKey + '">' +
@@ -486,7 +486,7 @@
         }).join('') +
         '<div class="row"><label>Equipped hat</label><input type="text" data-field="equippedHat" data-pet="' + petKey + '" value="' + (pet.equippedHat || '') + '" placeholder="e.g. woodcutting-25, woodcutting-max, completionist"></div>' +
         '<div class="row"><label>Purchased skin colors</label><input type="text" data-field="purchasedSkinColors" data-pet="' + petKey + '" value="' + (pet.purchasedSkinColors || []).join(', ') + '" placeholder="comma-separated hex, e.g. #5C6E78, #3F7F73"></div>' +
-        '<div class="row"><label>Skin color</label><input type="color" data-field="skinColor" data-pet="' + petKey + '" value="' + (pet.skinColor || '#8FB4D6') + '"></div>' +
+        '<div class="row"><label>Skin color</label><input type="text" data-field="skinColor" data-pet="' + petKey + '" value="' + (pet.skinColor || '#5B7B9A') + '" placeholder="hex, or \'rainbow\' for the cycling skin"></div>' +
         '<div class="row"><button data-apply-pet="' + petKey + '">Apply this pet’s fields</button></div>' +
         '<div class="row"><label>AFK block</label>' + (blockActive
           ? '<span>' + pet.activeAfkBlock.hours + 'h block, ' + Math.round(pet.activeAfkBlock.xpGrantedSoFar || 0) + ' XP granted so far</span> <button data-clear-block="' + petKey + '" class="danger">Clear block</button>'

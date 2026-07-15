@@ -356,89 +356,76 @@ page since its live counts never arrived.
   transaction — the same lazy, first-writer-wins pattern as Tending
   Today's weekly reset and the Star Board's milestone stamping.
 - **Skill levels (Woodcutting / Gardening / Fishing)** are permanent and
-  independent per pet. Each user picks which skill is active; XP accrues
-  passively from an idle/AFK-hour bank that fills 1:1 with the household's
-  lifetime completion total (`bankedHours = liveTotal - hoursAlreadyGranted`)
-  and drains into XP on every page load, based on real elapsed time since
-  that pet's last visit (anchored on Firestore `serverTimestamp()`, never
-  the client's clock). A 15-hour/day grant cap keeps a single
-  batch-completion day (e.g. restocking the whole grocery list at once)
-  from handing out a disproportionate chunk of levels in one sitting — the
-  cap only limits how much of a day's consumed bank turns into XP, it
-  doesn't let the leftover roll over to the next day. The XP curve itself
-  is RuneScape's leveling formula, flattened (doubling every 10 levels
-  instead of 7, since this system has no faster-training-method unlocks to
-  offset RS's back-loading) and rescaled so level 99 = 1000 AFK hours.
-  Because this grant math runs on *every* page load — not just when the
-  widget is opened — progress accrues in the background the same way idle
-  games like Melvor or AFK Arena work: you don't have to check in for it to
-  happen, you just eventually see the result.
-- **Displayed XP** is a purely cosmetic ×1000 scaling of the underlying banked
-  hours (`xpForHours(hours) = hours * 1000`) — the level curve, grant math,
-  and daily cap are all still computed in raw hours, only the on-screen
-  number is scaled up so it reads like a game currency (level 99 = 1,000,000
-  displayed XP). Whenever either pet's XP increases (detected by diffing
-  each live Firestore snapshot against the previous one — same client-side
-  comparison technique the Star Board's milestone banner uses), a
-  "+&lt;emoji&gt;N" popup (e.g. "+🐟230") floats up from that pet's sprite
-  and fades out, as long as the increase is at least 1 (displayed) XP. This
-  fires for both pets symmetrically, from whichever device happens to be
-  open when the sync lands — it's not limited to "my own pet, only when I
-  personally triggered the grant." A second, separate popup ("+N hr")
-  floats once over the whole widget (not per-pet) whenever the shared
-  household completion total itself ticks up, since that total feeds both
-  pets' banked hours identically and duplicating it per-sprite would be
-  redundant.
+  independent per pet. Each user picks which skill is active. Every tracked
+  action anywhere on the site grants that skill XP directly and immediately
+  — no idle/bank step — tiered by action type (`tierXpForKey()`: a quick
+  daily/grocery/zone check-off is worth less than a note/meal/deep-clean
+  action, and a perfect day is worth far more). A per-key high-water-mark
+  cursor (`lastGrantedCounts`) makes each grant monotonic, so rapidly
+  checking and unchecking the same task can't be farmed for repeat XP. The
+  level curve is RuneScape's formula, flattened and rescaled so level 99 =
+  1,000,000 XP.
+- **Tokens** are a separate, uncapped currency — every tracked action also
+  earns 1 token (🪙), independent of which skill is active. Tokens spend on
+  purchasable AFK-time blocks (1h/2h/5h/10h, priced on a discount curve from
+  5 to 35 tokens — while a block is active the prop animates and XP trickles
+  in on its own based on real elapsed time, capped to what was actually
+  purchased) and on skin colors (see Cosmetics below). Whenever XP or tokens
+  increase — detected by diffing each live Firestore snapshot against the
+  previous one, same client-side comparison technique the Star Board's
+  milestone banner uses — a floating "+&lt;emoji&gt;N" or "+N🪙" popup
+  appears over the relevant pet/widget. This fires for both pets
+  symmetrically, from whichever device happens to be open when the sync
+  lands — it's not limited to "my own pet, only when I personally triggered
+  the grant."
 - **Cosmetics** are two independent overlays, not per-life-stage art:
   milestone hats (unlocked permanently at skill levels 25/50/75/90/99, plus
-  a "completionist" hat when every skill hits 99) and an active-skill prop
+  a "completionist" hat when every skill hits 99 — hat buttons show the
+  skill's emoji rather than spelling out its name) and an active-skill prop
   (axe/rod/trowel) that swaps automatically with whichever skill is
   currently set active. The hat renders **behind** the body and the prop
   renders **in front of** it — full stack, back to front: hat → body →
-  prop — so any body silhouette detail naturally overlaps the hat with no
-  extra art, while the held tool stays visible as a "the pet is working"
-  cue. The prop also reacts to whether there's live AFK fuel behind the
-  active skill: **working** (animated) when `bankedHours > 0`, **resting**
-  (desaturated, animation paused) when the bank is empty — a wordless nudge
-  that the household needs to knock out more tasks to keep the pet
-  working. A third state — **hidden entirely** — applies while a pet is
-  actively wandering (see below), since a held tool mid-stride doesn't
-  make sense and would otherwise imply a fourth visual state on top of
-  working/resting. Hat unlock status and the completionist check are always
-  computed live from current skill levels, never stored as an earned flag
-  — only which hat is currently *equipped* is persisted, the same
-  derive-don't-store approach used for life stage and the AFK bank.
-- **Tinting:** body art ships as grayscale pixel art so each pet can have a
-  user-chosen skin color; hat trims (grayscale) get their tier color from
-  `achievements.js`'s existing `BADGE_PALETTES` prestige cycle, reusing the
-  same shimmer-sweep technique as the Star Board — hat *bases*, by
-  contrast, ship pre-colored and are never tinted. Recoloring is done in an
-  offscreen `<canvas>` (`getTintedImage()`): draw the source PNG once, scale
-  each opaque pixel's grayscale value by the target color's channels (the
-  same math a CSS multiply blend would do), and cache the result as a data
-  URL per (image, color) pair. The design originally called for a CSS
-  `mix-blend-mode: multiply` + `mask-image` approach with this canvas
-  technique as a documented fallback "if CSS blend-mode quirks become
-  annoying" — they did (inconsistent behavior in Firefox vs. Chromium), so
-  the canvas fallback is what actually shipped, for both the body and hat
-  trims. Every plausible color combination (each swatch × body frame, each
-  prestige color × hat trim) is precomputed once up front rather than
-  lazily on first use, so switching skin color or leveling into a new hat
-  tier never has to wait on an async decode mid-render.
-- **Two pets, one household:** both pets draw AFK hours independently from
-  the same shared completion total (like two meters reading the same water
-  main), so total pet output roughly doubles versus a single-pet system —
-  a deliberate tradeoff, not an oversight. Life stage is the one thing kept
-  shared, since it's derived from one household-wide monthly baseline
-  rather than anything either pet does individually.
+  prop. The prop is a simple two-state toggle: **working** (animated) for a
+  few seconds right after an action grants XP, or continuously while an AFK
+  block is active; **hidden entirely** otherwise, including while the pet is
+  actively wandering (see below), since a held tool mid-stride doesn't make
+  sense. Skin color has 4 free, on-theme colors plus 7 token-purchasable
+  colors across three price/flair tiers (Common/Uncommon/Rare, 5–40 tokens,
+  escalating from no flair to a shimmer glow), topped by a Rainbow option
+  that smoothly cycles through hues. Hat unlock status and the completionist
+  check are always computed live from current skill levels, never stored as
+  an earned flag — only which hat/skin color is currently *equipped* is
+  persisted, the same derive-don't-store approach used for life stage.
+- **Tinting & smooth color-cycling:** body art ships as grayscale pixel art
+  so each pet can have a user-chosen skin color; hat trims (grayscale) get
+  their tier color from `achievements.js`'s existing `BADGE_PALETTES`
+  prestige cycle. Recoloring is done in an offscreen `<canvas>`
+  (`getTintedImage()`): draw the source PNG once, scale each opaque pixel's
+  grayscale value by the target color's channels (the same math a CSS
+  multiply blend would do), and cache the result as a data URL per (image,
+  color) pair — every plausible combination is precomputed up front so
+  nothing waits on an async decode mid-render. Since canvas-tinted images
+  are static, "smooth" color-cycling (the completionist hat's trim, and the
+  Rainbow skin) is simulated rather than a true per-pixel interpolation:
+  `buildCyclingLayers()` stacks one pre-tinted image per color in the cycle,
+  all sharing one crossfade `@keyframes` animation staggered by
+  `animation-delay` so exactly one layer is ever at full opacity at a time.
+- **Two pets, one household:** both pets earn skill XP and tokens
+  independently off the same shared completion total (like two meters
+  reading the same water main), so total pet output roughly doubles versus a
+  single-pet system — a deliberate tradeoff, not an oversight. Life stage is
+  the one thing kept shared, since it's derived from one household-wide
+  monthly baseline rather than anything either pet does individually.
 - **Widget interaction** is progressive disclosure, all within the
   persistent widget — no dedicated page: tap a pet to see its 3 skill
-  levels (plus its current banked AFK hours), tap a skill pill to see that
-  skill's full XP progress and, only on your own pet, a "train this skill"
-  control. Setting a skill active is the one genuine user-initiated write
-  in the whole system beyond cosmetic preferences (equipped hat, skin
-  color) — it updates only that one field on your own pet, never the whole
-  `pets` map, so it can't clobber the other person's pet state.
+  levels plus its token balance, a circular "?" button that reveals a brief
+  explainer of what tokens/AFK time/skin colors/hats do, and tap a skill
+  pill to see that skill's full XP progress and, only on your own pet, a
+  "train this skill" control. Setting a skill active, buying AFK time or a
+  skin color, and equipping a hat/color are the user-initiated writes in the
+  system beyond life stage — each updates only that one field on your own
+  pet, never the whole `pets` map, so it can't clobber the other person's
+  pet state.
 - **Wandering:** the widget is a full-width, short ground strip rather than
   a small fixed corner cluster — kept short specifically so it still
   clears centered bottom-of-page controls like home.html's dark mode
