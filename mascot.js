@@ -775,7 +775,7 @@
       font-size: 15px;
       color: var(--ink, #263029);
     }
-    .mascot-close-row { display: flex; justify-content: space-between; align-items: center; }
+    .mascot-close-row { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
     .mascot-close-btn {
       background: none;
       border: none;
@@ -1742,7 +1742,7 @@
       }
 
       panel.innerHTML = `
-        <div class="mascot-close-row" style="justify-content:flex-end;"><button class="mascot-close-btn" id="mascot-close-btn">✕</button></div>
+        <div class="mascot-close-row"><button class="mascot-close-btn" id="mascot-close-btn">✕</button></div>
         <button class="mascot-back-btn" id="mascot-back-btn">‹ Back to skills</button>
         <div class="mascot-skill-detail">
           <h4>${SKILL_EMOJI[skill]} ${SKILL_LABELS[skill]} — Level ${level}</h4>
