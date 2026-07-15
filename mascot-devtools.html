@@ -180,10 +180,20 @@
     <label for="total-count">Lifetime completions</label>
     <input type="number" id="total-count" min="0">
     <button id="apply-total-btn">Apply</button>
-    <button id="bump-total-btn">+1</button>
+    <button id="bump-total-btn">+1 (test:complete)</button>
   </div>
-  <div class="hint">Drives <code>household/achievements-state</code>'s <code>counts</code> map (stored here as
-    one key, <code>test:complete</code>) — this is the shared total both pets' AFK banks derive from.</div>
+  <div class="hint">Drives <code>household/achievements-state</code>'s <code>counts</code> map. "+1
+    (test:complete)" bumps a generic key (Standard tier, since it's not one of the named keys below) —
+    use it for token/total-count testing when the specific tier doesn't matter.</div>
+  <div class="row" style="margin-top:10px;">
+    <label>Simulate a real action</label>
+    <button data-sim-key="daily:bed">+1 daily:bed (Quick, 125 XP)</button>
+    <button data-sim-key="note:resolved">+1 note:resolved (Standard, 300 XP)</button>
+    <button data-sim-key="day:perfect">+1 day:perfect (Perfect-day, 2500 XP)</button>
+  </div>
+  <div class="hint">Bumps that specific <code>achievements-state</code> key by 1 — this is what actually
+    exercises <code>tierXpForKey()</code>'s tier lookup, since the currently signed-in user's own pet's
+    grant transaction fires live off whichever key changed, not just the total.</div>
 </div>
 
 <div class="panel" id="pets-panel">
@@ -228,11 +238,13 @@
   const db = loadDB(); // { "collection/docId": plainObjectWithMarkers }
   const listeners = {}; // "collection/docId" -> Set of callbacks
 
-  // Timestamps and FieldValue.serverTimestamp() need marker objects that
-  // survive JSON (de)serialization as plain data, then get reconstituted
-  // with a working .toMillis() every time they're read back out.
+  // Timestamps and FieldValue.serverTimestamp()/.delete() need marker
+  // objects that survive JSON (de)serialization as plain data, then get
+  // reconstituted (timestamps get a working .toMillis()) every time
+  // they're read back out.
   function isTimestampMarker(v) { return v && typeof v === 'object' && v.__ts === true; }
-  function isSentinel(v) { return v && typeof v === 'object' && v.__serverTimestampSentinel === true; }
+  function isServerTimestampSentinel(v) { return v && typeof v === 'object' && v.__serverTimestampSentinel === true; }
+  function isDeleteSentinel(v) { return v && typeof v === 'object' && v.__deleteSentinel === true; }
 
   function reviveTimestamps(v) {
     if (Array.isArray(v)) return v.map(reviveTimestamps);
@@ -248,12 +260,21 @@
     return v;
   }
 
+  // Applied one level up from the value itself (see the `if
+  // (isDeleteSentinel(src[k]))` check in the loop below) since deleting a
+  // field means removing the *key*, not producing a replacement value for
+  // it — same reason mascot.js's runVisitGrant needed a real
+  // FieldValue.delete() instead of a plain JS `delete` (merge:true leaves
+  // fields absent from the write untouched, it doesn't delete them).
   function deepMerge(target, src) {
-    if (isSentinel(src)) return { __ts: true, __ms: Date.now() };
+    if (isServerTimestampSentinel(src)) return { __ts: true, __ms: Date.now() };
     if (src === null || typeof src !== 'object' || Array.isArray(src)) return src;
     const out = (target && typeof target === 'object' && !Array.isArray(target) && !isTimestampMarker(target))
       ? Object.assign({}, target) : {};
-    Object.keys(src).forEach((k) => { out[k] = deepMerge(out[k], src[k]); });
+    Object.keys(src).forEach((k) => {
+      if (isDeleteSentinel(src[k])) { delete out[k]; return; }
+      out[k] = deepMerge(out[k], src[k]);
+    });
     return out;
   }
 
@@ -304,7 +325,8 @@
 
   function firestore() { return firestoreInstance; }
   firestore.FieldValue = {
-    serverTimestamp: function () { return { __serverTimestampSentinel: true }; }
+    serverTimestamp: function () { return { __serverTimestampSentinel: true }; },
+    delete: function () { return { __deleteSentinel: true }; }
   };
 
   window.firebase = { firestore: firestore };
@@ -337,7 +359,7 @@
 </script>
 
 <script src="achievements.js?v=5"></script>
-<script src="mascot.js?v=31"></script>
+<script src="mascot.js?v=33"></script>
 
 <script>
 (function () {
@@ -383,29 +405,61 @@
   });
 
   // --- Household totals ---
+  // setAch() does a full overwrite of household/achievements-state (no
+  // merge), so every handler here reads the current counts map first and
+  // writes back the whole thing with just one key changed — otherwise each
+  // click would wipe out every other key, which matters a lot more now
+  // than it did under the old system (the redesign's tier lookup keys off
+  // *which* achievements-state key changed, not just the summed total).
+  function bumpCountKey(key, delta) {
+    const counts = Object.assign({}, getAch().counts || {});
+    counts[key] = (counts[key] || 0) + delta;
+    setAch({ counts: counts });
+    return counts[key];
+  }
+
   const totalInput = document.getElementById('total-count');
   totalInput.value = totalCompletions();
   document.getElementById('apply-total-btn').addEventListener('click', function () {
-    setAch({ counts: { 'test:complete': parseInt(totalInput.value, 10) || 0 } });
+    const counts = Object.assign({}, getAch().counts || {});
+    const currentGeneric = counts['test:complete'] || 0;
+    const target = parseInt(totalInput.value, 10) || 0;
+    counts['test:complete'] = currentGeneric + (target - totalCompletions());
+    setAch({ counts: counts });
   });
   document.getElementById('bump-total-btn').addEventListener('click', function () {
-    const next = totalCompletions() + 1;
-    setAch({ counts: { 'test:complete': next } });
-    totalInput.value = next;
+    bumpCountKey('test:complete', 1);
+    totalInput.value = totalCompletions();
+  });
+  document.querySelectorAll('[data-sim-key]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      bumpCountKey(btn.getAttribute('data-sim-key'), 1);
+      totalInput.value = totalCompletions();
+    });
   });
 
   // --- Per-pet controls ---
+  // Mirrors mascot.js's own defaultPet()/computeTokens() shape — see
+  // petDesign_notes.md's "New data model & grant mechanism" for the real
+  // spec these controls are editing.
   function defaultPet() {
     return {
-      hoursAlreadyGranted: 0,
-      dailyGrantKey: '',
-      dailyGrantedSoFar: 0,
-      lastVisitAt: null,
+      tokensBaseline: 0,
+      tokensSpent: 0,
+      lastGrantedCounts: {},
       activeSkill: 'woodcutting',
       skillXP: { woodcutting: 0, gardening: 0, fishing: 0 },
       equippedHat: null,
-      skinColor: '#8FB4D6'
+      purchasedSkinColors: [],
+      skinColor: '#8FB4D6',
+      activeAfkBlock: null,
+      lastBlockGrantAt: null,
+      lastActionGrantAt: null
     };
+  }
+
+  function computeTokens(pet) {
+    return Math.max(0, totalCompletions() - (pet.tokensBaseline || 0) - (pet.tokensSpent || 0));
   }
 
   function renderPetControls() {
@@ -418,21 +472,30 @@
       const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
       const block = document.createElement('div');
       block.className = 'pet-block';
+      const blockActive = !!pet.activeAfkBlock;
       block.innerHTML =
         '<h3>' + PET_NAMES[petKey] + ' (' + petKey + ')</h3>' +
-        '<div class="row"><label>Hours already granted</label><input type="number" step="0.1" data-field="hoursAlreadyGranted" data-pet="' + petKey + '" value="' + pet.hoursAlreadyGranted + '"></div>' +
-        '<div class="row"><label>Daily granted so far</label><input type="number" step="0.1" data-field="dailyGrantedSoFar" data-pet="' + petKey + '" value="' + pet.dailyGrantedSoFar + '"></div>' +
+        '<div class="row"><label>🪙 Tokens (computed)</label><strong>' + computeTokens(pet).toLocaleString() + '</strong></div>' +
+        '<div class="row"><label>Tokens baseline</label><input type="number" step="1" data-field="tokensBaseline" data-pet="' + petKey + '" value="' + pet.tokensBaseline + '"></div>' +
+        '<div class="row"><label>Tokens spent</label><input type="number" step="1" data-field="tokensSpent" data-pet="' + petKey + '" value="' + pet.tokensSpent + '"></div>' +
         '<div class="row"><label>Active skill</label><select data-field="activeSkill" data-pet="' + petKey + '">' +
           SKILLS.map(function (s) { return '<option value="' + s + '"' + (pet.activeSkill === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') +
         '</select></div>' +
         SKILLS.map(function (s) {
-          return '<div class="row"><label>' + s + ' hours (skillXP)</label><input type="number" step="0.1" data-field="skillXP.' + s + '" data-pet="' + petKey + '" value="' + (pet.skillXP[s] || 0) + '"></div>';
+          return '<div class="row"><label>' + s + ' XP (skillXP)</label><input type="number" step="1" data-field="skillXP.' + s + '" data-pet="' + petKey + '" value="' + (pet.skillXP[s] || 0) + '"></div>';
         }).join('') +
         '<div class="row"><label>Equipped hat</label><input type="text" data-field="equippedHat" data-pet="' + petKey + '" value="' + (pet.equippedHat || '') + '" placeholder="e.g. woodcutting-25, woodcutting-max, completionist"></div>' +
+        '<div class="row"><label>Purchased skin colors</label><input type="text" data-field="purchasedSkinColors" data-pet="' + petKey + '" value="' + (pet.purchasedSkinColors || []).join(', ') + '" placeholder="comma-separated hex, e.g. #5C6E78, #3F7F73"></div>' +
         '<div class="row"><label>Skin color</label><input type="color" data-field="skinColor" data-pet="' + petKey + '" value="' + (pet.skinColor || '#8FB4D6') + '"></div>' +
         '<div class="row"><button data-apply-pet="' + petKey + '">Apply this pet’s fields</button></div>' +
-        '<div class="row"><label>Rewind last-visit by (minutes)</label><input type="number" id="rewind-' + petKey + '" value="60"><button data-rewind-pet="' + petKey + '">Rewind + note</button></div>' +
-        '<div class="hint">Rewinding last-visit simulates "it’s been N minutes since this pet’s owner last loaded a page" — click "Reload page" above afterward to trigger the real visit-grant transaction against that gap.</div>';
+        '<div class="row"><label>AFK block</label>' + (blockActive
+          ? '<span>' + pet.activeAfkBlock.hours + 'h block, ' + Math.round(pet.activeAfkBlock.xpGrantedSoFar || 0) + ' XP granted so far</span> <button data-clear-block="' + petKey + '" class="danger">Clear block</button>'
+          : '<span>none active</span> <button data-start-block="' + petKey + '" data-hours="1">Start 1h (test)</button> <button data-start-block="' + petKey + '" data-hours="10">Start 10h (test)</button>') +
+        '</div>' +
+        (blockActive
+          ? '<div class="row"><label>Rewind block start by (minutes)</label><input type="number" id="rewind-' + petKey + '" value="30"><button data-rewind-pet="' + petKey + '">Rewind</button></div>' +
+            '<div class="hint">Rewinds both <code>startedAt</code> and <code>lastBlockGrantAt</code> so the next grant (any achievements-state change, or "Reload page") sees that much elapsed real time and pays out <code>UNIVERSAL_AFK_XP_PER_HOUR</code> accordingly.</div>'
+          : '');
       wrap.appendChild(block);
     });
 
@@ -445,7 +508,20 @@
     wrap.querySelectorAll('[data-rewind-pet]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         const petKey = btn.getAttribute('data-rewind-pet');
-        rewindLastVisit(petKey);
+        rewindAfkBlockStart(petKey);
+      });
+    });
+    wrap.querySelectorAll('[data-start-block]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const petKey = btn.getAttribute('data-start-block');
+        const hours = parseInt(btn.getAttribute('data-hours'), 10);
+        startTestAfkBlock(petKey, hours);
+      });
+    });
+    wrap.querySelectorAll('[data-clear-block]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const petKey = btn.getAttribute('data-clear-block');
+        clearAfkBlock(petKey);
       });
     });
   }
@@ -462,6 +538,8 @@
         pet.skillXP = Object.assign({}, pet.skillXP, { [skill]: val });
       } else if (field === 'equippedHat') {
         pet[field] = val.trim() ? val.trim() : null;
+      } else if (field === 'purchasedSkinColors') {
+        pet[field] = val.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
       } else {
         pet[field] = val;
       }
@@ -472,18 +550,49 @@
     renderRawMascot();
   }
 
-  function rewindLastVisit(petKey) {
+  // Starts a block the same shape purchaseAfkBlock() would write, without
+  // spending tokens — a pure test shortcut for exercising the block-grant
+  // transaction without having to earn/save up tokens first.
+  function startTestAfkBlock(petKey, hours) {
+    const mascotData = getMascot();
+    const pets = Object.assign({}, mascotData.pets || {});
+    const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
+    const nowMs = Date.now();
+    pet.activeAfkBlock = { hours: hours, price: 0, startedAt: { __ts: true, __ms: nowMs }, xpGrantedSoFar: 0 };
+    pet.lastBlockGrantAt = { __ts: true, __ms: nowMs };
+    pets[petKey] = pet;
+    setMascot(Object.assign({}, mascotData, { pets: pets }));
+    renderPetControls();
+    renderRawMascot();
+  }
+
+  function clearAfkBlock(petKey) {
+    const mascotData = getMascot();
+    const pets = Object.assign({}, mascotData.pets || {});
+    const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
+    pet.activeAfkBlock = null;
+    pet.lastBlockGrantAt = null;
+    pets[petKey] = pet;
+    setMascot(Object.assign({}, mascotData, { pets: pets }));
+    renderPetControls();
+    renderRawMascot();
+  }
+
+  function rewindAfkBlockStart(petKey) {
     const minutesInput = document.getElementById('rewind-' + petKey);
     const minutes = parseFloat(minutesInput.value) || 0;
     const mascotData = getMascot();
     const pets = Object.assign({}, mascotData.pets || {});
     const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
+    if (!pet.activeAfkBlock) { alert('No active AFK block on ' + PET_NAMES[petKey] + ' to rewind.'); return; }
     const nowMs = Date.now();
-    const currentMs = (pet.lastVisitAt && pet.lastVisitAt.__ms) ? pet.lastVisitAt.__ms : nowMs;
-    pet.lastVisitAt = { __ts: true, __ms: currentMs - minutes * 60000 };
+    const startedMs = (pet.activeAfkBlock.startedAt && pet.activeAfkBlock.startedAt.__ms) ? pet.activeAfkBlock.startedAt.__ms : nowMs;
+    const grantMs = (pet.lastBlockGrantAt && pet.lastBlockGrantAt.__ms) ? pet.lastBlockGrantAt.__ms : nowMs;
+    pet.activeAfkBlock = Object.assign({}, pet.activeAfkBlock, { startedAt: { __ts: true, __ms: startedMs - minutes * 60000 } });
+    pet.lastBlockGrantAt = { __ts: true, __ms: grantMs - minutes * 60000 };
     pets[petKey] = pet;
     setMascot(Object.assign({}, mascotData, { pets: pets }));
-    alert('Rewound ' + PET_NAMES[petKey] + '’s last-visit time by ' + minutes + ' minute(s). Click "Reload page" to trigger the grant.');
+    alert('Rewound ' + PET_NAMES[petKey] + '’s AFK block start by ' + minutes + ' minute(s). Click "Reload page" (or bump any count) to trigger the grant.');
   }
 
   // --- Raw JSON panel ---

@@ -2,7 +2,8 @@
 // living at the bottom of every page the same way priority-alert.js lives at
 // the top. Fully self-contained: injects its own <style> and DOM, no page
 // markup changes needed. See pet-assets/petDesign_notes.md for the full
-// design spec this file implements.
+// design spec this file implements ("Progression system redesign" section
+// for the shape below specifically).
 //
 // Two independent progression axes, both pure derivations off the same
 // household/achievements-state.counts total that already powers the Star
@@ -10,9 +11,13 @@
 //   1. Life stage (Fresh/In-Training/Rookie/Champion) — shared by both pets,
 //      resets monthly, driven by completions since the start of the month.
 //   2. Skill levels (woodcutting/gardening/fishing) — permanent, independent
-//      per pet, driven by an idle/AFK-hour bank that fills 1:1 with the
-//      household's lifetime completion total and drains into XP on every
-//      page load based on real elapsed time since the pet's last visit.
+//      per pet. XP is granted directly per tracked action the moment it
+//      happens (tiered by action type), detected by diffing consecutive
+//      achievements-state snapshots against a per-pet cursor — not by an
+//      hours-based idle bank (that system had a real bug: see
+//      petDesign_notes.md's redesign section for why it was replaced).
+//      A separate, uncapped token currency (1 action = 1 token) is spendable
+//      on purchasable AFK-time blocks and cosmetic skin colors.
 //
 // All persisted state lives in a single household/mascot-state document —
 // kept separate from achievements-state so this widget never adds write
@@ -41,9 +46,50 @@
   const SKILL_EMOJI = { woodcutting: '🪓', gardening: '🪴', fishing: '🐟' };
   const DEFAULT_SKIN_COLORS = { userA: '#8FB4D6', userB: '#E68A8F' };
   const SWATCH_COLORS = ['#8FB4D6', '#E68A8F', '#A6C79A', '#F0C25A', '#BF9FD6', '#8A93A0', '#D98C4A', '#6B8E8E'];
+  // Purchasable skin colors (tokens, not free) — reuses four of the site's
+  // own page accent colors (slate/clay/plum/teal) as a small, thematic v1
+  // cosmetic catalog rather than inventing a new palette from scratch.
+  const PREMIUM_SWATCHES = [
+    { color: '#5C6E78', price: 40 },
+    { color: '#C97064', price: 40 },
+    { color: '#8B6FA8', price: 40 },
+    { color: '#3F7F73', price: 40 }
+  ];
 
-  const DAILY_CAP_HOURS = 15;
   const HAT_TIER_LEVELS = [25, 50, 75, 90]; // standard-hat unlock tiers (99 = bespoke max hat, handled separately)
+
+  // ---------------------------------------------------------------------
+  // Progression redesign constants — see petDesign_notes.md's "Progression
+  // system redesign" section for the full reasoning behind these numbers.
+  // ---------------------------------------------------------------------
+  // XP granted per tracked action, by tier. Every recordAchievement() key
+  // sitewide falls into one of these three (see tierXpForKey below).
+  // Calibrated off ~5 days of real completion-rate data to target roughly
+  // 200 days to level 99 — a recommendation, not finalized; revisit once
+  // there's a full month of real data (see the doc's "Still open" list).
+  const XP_TIER_QUICK = 125;
+  const XP_TIER_STANDARD = 300;
+  const XP_TIER_PERFECT_DAY = 2500;
+
+  // Purchasable AFK-time blocks: hours of "prop animates as working, XP
+  // trickles in over elapsed real time" bought as a fixed chunk, priced off
+  // a 5-tokens-per-hour base rate with a discount that grows from 0% at 1hr
+  // to 30% at 10hr. See the doc's price table for the discount math.
+  const TOKEN_BLOCKS = [
+    { hours: 1, price: 5 },
+    { hours: 2, price: 9 },
+    { hours: 5, price: 20 },
+    { hours: 10, price: 35 }
+  ];
+  // Flat XP/hr rate an active AFK block grants, same regardless of which
+  // skill is active — separate from the per-action tier values above.
+  // Rough starting anchor (not yet worked through the way the tier/token
+  // numbers were) — see the doc's "Still open" list.
+  const UNIVERSAL_AFK_XP_PER_HOUR = 500;
+  // How long the prop shows its "working" animation right after a direct
+  // action grants XP — a lightweight "you just earned XP" flourish,
+  // distinct from the floating "+N XP" popup.
+  const POST_ACTION_FLOURISH_MS = 2500;
 
   // Life stage thresholds — monthProgress = liveTotal - baselineTotal.
   // Fresh 0-9 / In-Training 10-79 / Rookie 80-299 / Champion 300+.
@@ -111,8 +157,10 @@
   // ---------------------------------------------------------------------
   // Skill XP curve: RuneScape's formula (flattened: divisor 7 -> 10, i.e.
   // XP requirement doubles every 10 levels instead of 7), then linearly
-  // rescaled so level 99 = 1000 AFK hours. XP is stored/measured directly
-  // in AFK hours (1 banked hour granted = 1 XP), per the design doc.
+  // rescaled so level 99 = 1,000,000 XP directly — same target number the
+  // old hours-based system already displayed (1000 hours x a x1000 display
+  // scale), just reached directly now instead of via an hours intermediate
+  // step, since XP is granted per-action rather than drained from a bank.
   // ---------------------------------------------------------------------
   function rsRawXP(level, divisor) {
     let total = 0;
@@ -122,37 +170,25 @@
     return Math.floor(total / 4);
   }
   const RAW_99 = rsRawXP(99, 10);
-  const XP_SCALE = 1000 / RAW_99;
-  // Cumulative hours required to *reach* level L, for L = 1..99 (index 0 unused).
-  const LEVEL_HOURS = [0];
-  for (let L = 1; L <= 99; L++) LEVEL_HOURS[L] = rsRawXP(L, 10) * XP_SCALE;
+  const XP_SCALE = 1000000 / RAW_99;
+  // Cumulative XP required to *reach* level L, for L = 1..99 (index 0 unused).
+  const LEVEL_XP = [0];
+  for (let L = 1; L <= 99; L++) LEVEL_XP[L] = rsRawXP(L, 10) * XP_SCALE;
 
-  function levelForHours(hours) {
+  function levelForXP(xp) {
     let lvl = 1;
     for (let L = 1; L <= 99; L++) {
-      if (hours >= LEVEL_HOURS[L]) lvl = L; else break;
+      if (xp >= LEVEL_XP[L]) lvl = L; else break;
     }
     return lvl;
   }
-  function hoursForLevel(level) { return LEVEL_HOURS[Math.max(1, Math.min(99, level))]; }
-
-  // Display-only XP unit, separate from the hours the level curve above is
-  // actually computed in. Banked hours (and the level thresholds, grant
-  // math, daily cap) stay exactly as they are — this is purely a cosmetic
-  // multiplier so on-screen numbers ("+230 XP") read like a game currency
-  // instead of literally showing hour counts.
-  const DISPLAY_XP_SCALE = 1000;
-  function xpForHours(hours) { return hours * DISPLAY_XP_SCALE; }
+  function xpForLevel(level) { return LEVEL_XP[Math.max(1, Math.min(99, level))]; }
 
   // ---------------------------------------------------------------------
-  // Small date/month helpers — same lazy first-writer-wins rollover pattern
-  // used elsewhere on the site (Tending Today's weekly reset, the Star
-  // Board's milestone stamping).
+  // Small month helper — same lazy first-writer-wins rollover pattern used
+  // elsewhere on the site (Tending Today's weekly reset, the Star Board's
+  // milestone stamping).
   // ---------------------------------------------------------------------
-  function todayDateStr() {
-    const d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  }
   function currentMonthKey() {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
@@ -169,14 +205,18 @@
   }
   function defaultPet(petKey) {
     return {
-      hoursAlreadyGranted: 0,
-      dailyGrantKey: todayDateStr(),
-      dailyGrantedSoFar: 0,
-      lastVisitAt: null,
+      // tokens are always derived, never stored directly — see computeTokens.
+      tokensBaseline: 0,   // liveTotal at last reset (pet creation, or the redesign migration)
+      tokensSpent: 0,
+      lastGrantedCounts: {},  // per-key achievements-state.counts cursor, see runVisitGrant
       activeSkill: 'woodcutting',
       skillXP: { woodcutting: 0, gardening: 0, fishing: 0 },
       equippedHat: null,
-      skinColor: DEFAULT_SKIN_COLORS[petKey] || '#8FB4D6'
+      purchasedSkinColors: [],  // hex codes owned beyond the free SWATCH_COLORS
+      skinColor: DEFAULT_SKIN_COLORS[petKey] || '#8FB4D6',
+      activeAfkBlock: null,     // or { hours, price, startedAt, xpGrantedSoFar }
+      lastBlockGrantAt: null,
+      lastActionGrantAt: null   // drives the post-action prop flourish
     };
   }
 
@@ -186,70 +226,145 @@
   function mascotRef() { return firebase.firestore().collection('household').doc('mascot-state'); }
   function achievementsRef() { return firebase.firestore().collection('household').doc('achievements-state'); }
 
-  // Fires once per page load, for the current signed-in user's own pet only
-  // — the AFK bank/XP grant math. Reads both achievements-state (for
-  // liveTotal) and mascot-state inside one transaction so the life-stage
-  // rollover and the grant math see a consistent snapshot.
+  // Every recordAchievement() key sitewide maps to one of three XP tiers.
+  // Unlisted keys (contact:added, project:*, bill/subscription/amazon/
+  // chewy:added, cancel:completed, wishlist:item, ...) default to Standard
+  // — reasonable middle ground for one-off actions that aren't quick
+  // checkbox-style taps but also aren't the once-a-day perfect-day bonus.
+  function tierXpForKey(key) {
+    if (key === 'day:perfect') return XP_TIER_PERFECT_DAY;
+    if (key.indexOf('daily:') === 0) return XP_TIER_QUICK;
+    if (key === 'grocery:item') return XP_TIER_QUICK;
+    if (key.indexOf('zone:') === 0) return XP_TIER_QUICK;
+    if (key === 'note:resolved') return XP_TIER_STANDARD;
+    if (key === 'meal:recipe') return XP_TIER_STANDARD;
+    if (key === 'pet:brush') return XP_TIER_STANDARD;
+    if (key.indexOf('deep:') === 0) return XP_TIER_STANDARD;
+    return XP_TIER_STANDARD;
+  }
+
+  // Tokens are always derived, never stored directly — same shape the old
+  // bankedHours calculation used, just with tokensBaseline in place of
+  // hoursAlreadyGranted and no daily cap (nothing needs discarding).
+  function computeTokens(pet, liveTotal) {
+    return Math.max(0, liveTotal - (pet.tokensBaseline || 0) - (pet.tokensSpent || 0));
+  }
+
+  // Fires on every live achievements-state update (see initMascotWidget),
+  // for the current signed-in user's own pet only. Reads both
+  // achievements-state (for liveTotal + per-key counts) and mascot-state
+  // inside one transaction so the life-stage rollover, the tiered skill-XP
+  // grant, and the AFK-block grant all see one consistent snapshot.
   async function runVisitGrant(petKey) {
     try {
       await firebase.firestore().runTransaction(async (tx) => {
         const achSnap = await tx.get(achievementsRef());
         const mascotSnap = await tx.get(mascotRef());
         const achData = achSnap.exists ? achSnap.data() : {};
-        const liveTotal = sumCounts(achData.counts || {});
+        const counts = achData.counts || {};
+        const liveTotal = sumCounts(counts);
         const mascotData = mascotSnap.exists ? mascotSnap.data() : {};
 
-        // Life stage: lazy monthly rollover, first-writer-wins.
+        // Life stage: lazy monthly rollover, first-writer-wins. Unrelated to
+        // the skill/token redesign below — see petDesign_notes.md's note on
+        // why only the body axis is monthly-scoped.
         const monthKey = currentMonthKey();
         let baselineTotal = typeof mascotData.baselineTotal === 'number' ? mascotData.baselineTotal : liveTotal;
         let mKey = mascotData.monthKey || monthKey;
         if (mKey !== monthKey) { mKey = monthKey; baselineTotal = liveTotal; }
 
         const pets = Object.assign({}, mascotData.pets || {});
-        const isNewPet = !pets[petKey];
-        const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
-        // A brand-new pet's baseline must start at the current liveTotal, not
-        // 0 — otherwise its very first grant would instantly bank the
-        // household's entire pre-existing lifetime completion count as AFK
-        // hours, instead of starting fresh at 0 and only accruing from
-        // completions going forward (same baseline-snapshot idea life stage
-        // already uses for monthProgress).
-        if (isNewPet) pet.hoursAlreadyGranted = liveTotal;
+        const existingRaw = pets[petKey];
+        const isNewPet = !existingRaw;
+        // Pets created under the old hours/bank system are detected by the
+        // presence of hoursAlreadyGranted — no pet created under this
+        // redesign ever has that field. Full reset, not a conversion: the
+        // mascot feature is still WIP, so there's no old progress worth
+        // preserving here (see petDesign_notes.md's migration note).
+        const isLegacyPet = !isNewPet && typeof existingRaw.hoursAlreadyGranted === 'number';
+        const pet = Object.assign(defaultPet(petKey), existingRaw || {});
 
-        // AFK bank = liveTotal - hoursAlreadyGranted (derived, never stored directly).
-        const hoursAlreadyGranted = pet.hoursAlreadyGranted || 0;
-        const bankedHours = Math.max(0, liveTotal - hoursAlreadyGranted);
-
-        // Daily grant cap — lazy rollover on its own date key.
-        const dateStr = todayDateStr();
-        let dailyGrantKey = pet.dailyGrantKey;
-        let dailyGrantedSoFar = pet.dailyGrantedSoFar || 0;
-        if (dailyGrantKey !== dateStr) { dailyGrantKey = dateStr; dailyGrantedSoFar = 0; }
-
-        // Elapsed time since last visit, anchored on the server-set
-        // timestamp (never the client's local clock).
-        let elapsedHours = 0;
-        if (pet.lastVisitAt && typeof pet.lastVisitAt.toMillis === 'function') {
-          elapsedHours = Math.max(0, (Date.now() - pet.lastVisitAt.toMillis()) / 3600000);
+        if (isNewPet || isLegacyPet) {
+          pet.tokensBaseline = liveTotal;
+          pet.tokensSpent = 0;
+          pet.lastGrantedCounts = Object.assign({}, counts);
+          pet.skillXP = { woodcutting: 0, gardening: 0, fishing: 0 };
+          // Reset alongside skillXP, not left alone — resolveHat() doesn't
+          // re-validate that an equipped hat is still unlocked at the
+          // pet's current level, it just renders whatever id is stored, so
+          // an un-reset equippedHat would keep showing a hat the reset
+          // skillXP no longer actually earns.
+          pet.equippedHat = null;
+          pet.activeAfkBlock = null;
+          pet.lastBlockGrantAt = null;
+          if (isLegacyPet) {
+            // tx.set(..., {merge:true}) merges nested maps field-by-field —
+            // fields simply absent from the write are left as-is, not
+            // deleted, so a plain JS `delete` here wouldn't actually remove
+            // these from Firestore. FieldValue.delete() is the real sentinel
+            // for "remove this field," needed since these legacy fields no
+            // longer exist in defaultPet() and would otherwise linger
+            // forever on already-migrated pets.
+            pet.hoursAlreadyGranted = firebase.firestore.FieldValue.delete();
+            pet.dailyGrantKey = firebase.firestore.FieldValue.delete();
+            pet.dailyGrantedSoFar = firebase.firestore.FieldValue.delete();
+            pet.lastVisitAt = firebase.firestore.FieldValue.delete();
+          }
         }
-        const consumed = Math.min(elapsedHours, bankedHours);
-        const grantable = Math.max(0, Math.min(consumed, DAILY_CAP_HOURS - dailyGrantedSoFar));
-        dailyGrantedSoFar += grantable;
-        // hoursAlreadyGranted advances by the FULL consumed amount (not just
-        // grantable) so the capped excess is discarded, not banked forward.
-        const newHoursAlreadyGranted = hoursAlreadyGranted + consumed;
 
         const activeSkill = SKILLS.includes(pet.activeSkill) ? pet.activeSkill : 'woodcutting';
         const skillXP = Object.assign({ woodcutting: 0, gardening: 0, fishing: 0 }, pet.skillXP || {});
-        skillXP[activeSkill] = (skillXP[activeSkill] || 0) + grantable;
+        let anyGrant = false;
+
+        // Tiered per-action skill XP: diff live counts against this pet's
+        // own cursor. Only positive deltas grant (an un-check/un-add isn't
+        // a new action) — see tierXpForKey for the tier mapping.
+        const lastGrantedCounts = pet.lastGrantedCounts || {};
+        Object.keys(counts).forEach((key) => {
+          const before = lastGrantedCounts[key] || 0;
+          const after = counts[key] || 0;
+          if (after <= before) return;
+          skillXP[activeSkill] += (after - before) * tierXpForKey(key);
+          anyGrant = true;
+        });
+
+        // AFK block grant, if one's currently active — flat universal rate
+        // over real elapsed time since the last grant, clamped to whichever
+        // comes first: the block's total XP, or its wall-clock duration.
+        let activeAfkBlock = pet.activeAfkBlock || null;
+        let lastBlockGrantAt = pet.lastBlockGrantAt || null;
+        if (activeAfkBlock) {
+          let elapsedHours = 0;
+          if (lastBlockGrantAt && typeof lastBlockGrantAt.toMillis === 'function') {
+            elapsedHours = Math.max(0, (Date.now() - lastBlockGrantAt.toMillis()) / 3600000);
+          }
+          const totalBlockXP = activeAfkBlock.hours * UNIVERSAL_AFK_XP_PER_HOUR;
+          const remaining = Math.max(0, totalBlockXP - (activeAfkBlock.xpGrantedSoFar || 0));
+          const grantable = Math.min(elapsedHours * UNIVERSAL_AFK_XP_PER_HOUR, remaining);
+          if (grantable > 0) {
+            skillXP[activeSkill] += grantable;
+            anyGrant = true;
+          }
+          const xpGrantedSoFar = (activeAfkBlock.xpGrantedSoFar || 0) + grantable;
+          const startedAtMs = activeAfkBlock.startedAt && typeof activeAfkBlock.startedAt.toMillis === 'function'
+            ? activeAfkBlock.startedAt.toMillis() : Date.now();
+          const wallElapsedHours = Math.max(0, (Date.now() - startedAtMs) / 3600000);
+          if (xpGrantedSoFar >= totalBlockXP || wallElapsedHours >= activeAfkBlock.hours) {
+            activeAfkBlock = null;
+            lastBlockGrantAt = null;
+          } else {
+            activeAfkBlock = Object.assign({}, activeAfkBlock, { xpGrantedSoFar });
+            lastBlockGrantAt = firebase.firestore.FieldValue.serverTimestamp();
+          }
+        }
 
         pets[petKey] = Object.assign({}, pet, {
-          hoursAlreadyGranted: newHoursAlreadyGranted,
-          dailyGrantKey,
-          dailyGrantedSoFar,
-          lastVisitAt: firebase.firestore.FieldValue.serverTimestamp(),
+          lastGrantedCounts: Object.assign({}, counts),
           activeSkill,
-          skillXP
+          skillXP,
+          activeAfkBlock,
+          lastBlockGrantAt,
+          lastActionGrantAt: anyGrant ? firebase.firestore.FieldValue.serverTimestamp() : (pet.lastActionGrantAt || null)
         });
 
         tx.set(mascotRef(), { monthKey: mKey, baselineTotal, pets }, { merge: true });
@@ -263,7 +378,6 @@
   // never the whole `pets` map, so they can't clobber the other person's
   // pet state on write.
   function setActiveSkill(petKey, skill) {
-    const field = 'pets.' + petKey + '.activeSkill';
     mascotRef().set({ pets: { [petKey]: { activeSkill: skill } } }, { merge: true })
       .catch((e) => console.error('Mascot setActiveSkill failed', e));
   }
@@ -276,6 +390,65 @@
       .catch((e) => console.error('Mascot setSkinColor failed', e));
   }
 
+  // Spends tokens on a purchasable skin color — transactional (reads
+  // achievements-state for liveTotal, same as the grant transaction) so two
+  // rapid purchases can't both succeed off a stale token balance. Silently
+  // no-ops if the color's already owned or tokens fall short by the time
+  // the transaction actually runs.
+  async function purchaseSkinColor(petKey, color, price) {
+    try {
+      await firebase.firestore().runTransaction(async (tx) => {
+        const achSnap = await tx.get(achievementsRef());
+        const mascotSnap = await tx.get(mascotRef());
+        const liveTotal = sumCounts((achSnap.exists ? achSnap.data() : {}).counts || {});
+        const mascotData = mascotSnap.exists ? mascotSnap.data() : {};
+        const pets = Object.assign({}, mascotData.pets || {});
+        const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
+        const owned = pet.purchasedSkinColors || [];
+        if (owned.indexOf(color) !== -1) return; // already owned
+        const tokens = computeTokens(pet, liveTotal);
+        if (tokens < price) return; // can't afford — button should already be disabled, this is just the race guard
+        pets[petKey] = Object.assign({}, pet, {
+          tokensSpent: (pet.tokensSpent || 0) + price,
+          purchasedSkinColors: owned.concat([color]),
+          skinColor: color
+        });
+        tx.set(mascotRef(), { pets }, { merge: true });
+      });
+    } catch (e) {
+      console.error('Mascot purchaseSkinColor failed', e);
+    }
+  }
+
+  // Spends tokens on an AFK-time block — same transactional shape as
+  // purchaseSkinColor. No-ops if a block's already active (the block itself
+  // is the only limiter — see petDesign_notes.md) or tokens fall short.
+  async function purchaseAfkBlock(petKey, blockIndex) {
+    const block = TOKEN_BLOCKS[blockIndex];
+    if (!block) return;
+    try {
+      await firebase.firestore().runTransaction(async (tx) => {
+        const achSnap = await tx.get(achievementsRef());
+        const mascotSnap = await tx.get(mascotRef());
+        const liveTotal = sumCounts((achSnap.exists ? achSnap.data() : {}).counts || {});
+        const mascotData = mascotSnap.exists ? mascotSnap.data() : {};
+        const pets = Object.assign({}, mascotData.pets || {});
+        const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
+        if (pet.activeAfkBlock) return; // already running a block
+        const tokens = computeTokens(pet, liveTotal);
+        if (tokens < block.price) return;
+        pets[petKey] = Object.assign({}, pet, {
+          tokensSpent: (pet.tokensSpent || 0) + block.price,
+          activeAfkBlock: { hours: block.hours, price: block.price, startedAt: firebase.firestore.FieldValue.serverTimestamp(), xpGrantedSoFar: 0 },
+          lastBlockGrantAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        tx.set(mascotRef(), { pets }, { merge: true });
+      });
+    } catch (e) {
+      console.error('Mascot purchaseAfkBlock failed', e);
+    }
+  }
+
   // ---------------------------------------------------------------------
   // Cosmetic unlocks — always computed live off current skill levels, never
   // persisted as an earned flag (skills only ever go up, so there's nothing
@@ -285,13 +458,13 @@
     const skillXP = pet.skillXP || {};
     const out = [];
     SKILLS.forEach((skill) => {
-      const level = levelForHours(skillXP[skill] || 0);
+      const level = levelForXP(skillXP[skill] || 0);
       HAT_TIER_LEVELS.forEach((tier) => {
         if (level >= tier) out.push({ id: skill + '-' + tier, skill, tier, kind: 'standard' });
       });
       if (level >= 99) out.push({ id: skill + '-max', skill, tier: 99, kind: 'max' });
     });
-    const allMaxed = SKILLS.every((skill) => levelForHours(skillXP[skill] || 0) >= 99);
+    const allMaxed = SKILLS.every((skill) => levelForXP(skillXP[skill] || 0) >= 99);
     if (allMaxed) out.push({ id: 'completionist', kind: 'completionist' });
     return out;
   }
@@ -472,11 +645,6 @@
       -webkit-mask-size: 100% 100%;
       mask-size: 100% 100%;
     }
-    .mascot-prop.mascot-resting {
-      filter: grayscale(1) brightness(0.85);
-      opacity: 0.55;
-      animation-play-state: paused !important;
-    }
     .mascot-prop.mascot-working {
       animation: mascot-prop-work 1.1s ease-in-out infinite;
     }
@@ -602,6 +770,41 @@
       cursor: pointer;
     }
     .mascot-swatch.mascot-swatch-active { border-color: var(--ink, #263029); border-width: 2px; }
+    .mascot-swatch-locked {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8px;
+      font-weight: 700;
+      color: #FFFFFF;
+      text-shadow: 0 1px 1px rgba(0,0,0,0.6);
+    }
+    .mascot-afk-active {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      color: var(--gold, #C08A2E);
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .mascot-afk-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .mascot-afk-btn {
+      background: var(--card, #FFFFFF);
+      color: var(--ink, #263029);
+      border: 1.5px solid var(--gold, #C08A2E);
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 11.5px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .mascot-afk-btn[disabled] {
+      opacity: 0.5;
+      cursor: default;
+      border-color: var(--line, #DDE3D6);
+      color: var(--muted, #6B7568);
+    }
     .mascot-back-btn {
       background: none; border: none; color: var(--muted, #6B7568);
       font-size: 12px; cursor: pointer; padding: 0 0 8px 0;
@@ -683,18 +886,20 @@
     el.addEventListener('animationend', () => el.remove());
   }
 
-  // Floats a single "+N hr" popup over the whole widget (not per-pet) when
+  // Floats a single "+N 🪙" popup over the whole widget (not per-pet) when
   // the shared household completion total ticks up — since that total feeds
-  // both pets' banked hours equally and identically, one popup for the
-  // whole widget reads better than duplicating it over each sprite.
-  function showAfkPopup(hours) {
+  // both pets' token balances equally and identically (tokensBaseline is a
+  // fixed per-pet offset, so a liveTotal increase raises both by the same
+  // delta regardless of each pet's own baseline), one popup for the whole
+  // widget reads better than duplicating it over each sprite.
+  function showTokenPopup(tokens) {
     const ground = document.getElementById('mascot-ground');
     if (!ground) return;
     const rect = ground.getBoundingClientRect();
     const layer = ensureFxLayer();
     const el = document.createElement('div');
     el.className = 'mascot-xp-popup';
-    el.textContent = '+' + hours.toLocaleString() + (hours === 1 ? ' hr' : ' hrs');
+    el.textContent = '+' + tokens.toLocaleString() + ' 🪙';
     el.style.left = (rect.left + rect.width / 2) + 'px';
     el.style.top = rect.top + 'px';
     layer.appendChild(el);
@@ -883,7 +1088,12 @@
       moveEndsAt: 0,
       facing: 'right',
       // Stagger each pet's very first move so both don't set off in sync.
-      stationaryUntil: Date.now() + 1000 + Math.random() * 4000
+      stationaryUntil: Date.now() + 1000 + Math.random() * 4000,
+      // Which grant's flourish (by lastActionGrantAt ms) already interrupted
+      // a glide in progress — see interruptGlideForFlourish — so a single
+      // flourish doesn't re-snap the pet on every idle-frame re-render
+      // during its whole visible window.
+      lastFlourishInterruptAt: 0
     };
     return motionState[petKey];
   }
@@ -959,7 +1169,63 @@
     return { x: m.x, walking: m.walking, moveDuration: m.moveDuration, facing: m.facing, justStarted };
   }
 
-  function renderSprite(container, pet, frame, bankedHours, isWalking) {
+  // Two states, not three: working (an AFK block is currently active, or an
+  // action grant just happened in the last POST_ACTION_FLOURISH_MS) or
+  // hidden entirely otherwise — no more desaturated "resting" state. Split
+  // into two checks rather than one combined bool because they interact
+  // with walking differently — see renderSprite's prop block below.
+  function isAfkBlockWorking(pet) {
+    return !!pet.activeAfkBlock;
+  }
+  function isActionFlourishing(pet) {
+    const lastGrant = pet.lastActionGrantAt;
+    if (lastGrant && typeof lastGrant.toMillis === 'function') {
+      return (Date.now() - lastGrant.toMillis()) < POST_ACTION_FLOURISH_MS;
+    }
+    return false;
+  }
+
+  // Stops a glide in progress the moment its flourish starts, so the pet
+  // visibly plants itself to "show off" the tool instead of the flourish
+  // just riding along on top of an already-smooth walk. Same
+  // freeze-in-place technique addResizeClampListener already uses: read
+  // the CSS transition's current live position via getComputedStyle (the
+  // browser keeps this up to date mid-transition), then cancel the
+  // transition and pin `left` to exactly that point so nothing visibly
+  // jumps. Guarded by lastFlourishInterruptAt so this only fires once per
+  // grant, not on every idle-frame re-render for the whole flourish
+  // window — without that guard the repeated snap-in-place would fight the
+  // pet's *next* legitimate glide if one started before the window ends
+  // (it can't in practice, since the post-interrupt stationaryUntil is
+  // always well beyond the flourish's own duration, but the guard is what
+  // makes that true rather than accidental).
+  function interruptGlideForFlourish(petKey, pet, slot, motion) {
+    if (!motion.walking || !isActionFlourishing(pet)) return;
+    const grantMs = pet.lastActionGrantAt.toMillis();
+    const m = motionState[petKey];
+    if (!m || m.lastFlourishInterruptAt === grantMs) return;
+    m.lastFlourishInterruptAt = grantMs;
+
+    const currentLeft = parseFloat(getComputedStyle(slot).left);
+    const snappedLeft = isNaN(currentLeft) ? m.x : currentLeft;
+    slot.style.transition = 'none';
+    slot.style.left = snappedLeft + 'px';
+    void slot.offsetWidth; // flush so the next real glide gets its own transition
+    slot.style.transition = '';
+
+    m.x = snappedLeft;
+    m.walking = false;
+    m.moveDuration = 0;
+    m.stationaryUntil = Date.now() + MIN_STATIONARY_MS + Math.random() * (MAX_STATIONARY_MS - MIN_STATIONARY_MS);
+    // Reflected into this render's own `motion` snapshot too, not just the
+    // persistent motionState, so the caller's subsequent justStarted check
+    // and renderSprite() call both see the interrupted state immediately.
+    motion.walking = false;
+    motion.justStarted = false;
+    motion.x = snappedLeft;
+  }
+
+  function renderSprite(container, pet, frame, isWalking) {
     const stage = pet.__stage;
     const skinColor = pet.skinColor || '#8FB4D6';
     const bodySrc = assetUrl('pet-body-' + stage.key + '-' + frame + '.png');
@@ -999,19 +1265,25 @@
         </div>`;
     }
 
-    // Hidden outright while walking (rather than just dimmed/desaturated
-    // like the "no banked hours" resting look) — a held tool doesn't make
-    // sense mid-stride, and hiding it avoids implying a third visual state
-    // on top of the existing working/resting distinction.
+    // Hidden entirely unless actively working. The two working reasons
+    // interact with walking differently: an AFK block is a sustained,
+    // ambient state, so it still hides during a walk (a held tool doesn't
+    // make sense mid-stride) — but the post-action flourish is a brief,
+    // time-critical cue tied to a specific moment, same as the floating
+    // "+XP" popup (which isn't gated on walking at all). Suppressing it
+    // just because the pet happened to be walking at that instant meant it
+    // could get lost entirely: the walk can easily outlast the flourish's
+    // own fixed window, so by the time walking stops there's nothing left
+    // to show.
     let propHtml = '';
-    if (pet.activeSkill && !isWalking) {
+    const working = isActionFlourishing(pet) || (isAfkBlockWorking(pet) && !isWalking);
+    if (pet.activeSkill && working) {
       const propAnchor = PROP_ANCHORS[pet.activeSkill];
       const propSrc = assetUrl('prop-' + pet.activeSkill + '.png');
       const txPct = (stage.hand.x - propAnchor.x) / 64 * 100;
       const tyPct = (stage.hand.y - propAnchor.y) / 64 * 100;
-      const working = bankedHours > 0;
       propHtml = `
-        <img class="mascot-prop ${working ? 'mascot-working' : 'mascot-resting'}" src="${propSrc}"
+        <img class="mascot-prop mascot-working" src="${propSrc}"
           style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;--mascot-prop-tx:${txPct}%;--mascot-prop-ty:${tyPct}%;transform:translate(${txPct}%, ${tyPct}%);animation-delay:${phaseDelay(1100)};" />`;
     }
 
@@ -1053,7 +1325,7 @@
       const raw = (data.pets && data.pets[key]) || defaultPet(key);
       const pet = Object.assign(defaultPet(key), raw);
       pet.__stage = stage;
-      pet.__bankedHours = Math.max(0, liveTotal - (pet.hoursAlreadyGranted || 0));
+      pet.__tokens = computeTokens(pet, liveTotal);
       pets[key] = pet;
     });
     return { pets, stage, liveTotal, monthProgress };
@@ -1100,6 +1372,7 @@
         });
         ground.appendChild(slot);
       }
+      interruptGlideForFlourish(key, pet, slot, motion);
       // Only (re)apply the transition + target when a new glide actually
       // started this tick — touching `left` again mid-glide with the same
       // value is harmless, but setting `transition` again would restart it.
@@ -1115,7 +1388,7 @@
       // original-facing spots. Source art faces left by default, so it's
       // moving *right* that needs the flip, not left.
       spriteBox.style.transform = motion.facing === 'right' ? 'scaleX(-1)' : 'scaleX(1)';
-      renderSprite(spriteBox, pet, widgetState.frame, pet.__bankedHours, motion.walking);
+      renderSprite(spriteBox, pet, widgetState.frame, motion.walking);
     });
 
     renderPanel(pets);
@@ -1134,9 +1407,10 @@
     const isOwn = petKey === widgetState.myPetKey;
 
     if (!widgetState.expandedSkill) {
-      // Level 1: skill pills + banked hours + (own pet only) hat/skin controls.
+      // Level 1: skill pills + tokens + (own pet only) AFK-block purchase +
+      // hat/skin controls.
       const pillsHtml = SKILLS.map((skill) => {
-        const level = levelForHours(pet.skillXP[skill] || 0);
+        const level = levelForXP(pet.skillXP[skill] || 0);
         return `<div class="mascot-pill" data-skill="${skill}">
           <span class="mascot-pill-icon">${SKILL_EMOJI[skill]}</span>
           <span>${level}</span>
@@ -1145,6 +1419,17 @@
 
       let ownControlsHtml = '';
       if (isOwn) {
+        let afkHtml = '';
+        if (pet.activeAfkBlock) {
+          afkHtml = `<div class="mascot-afk-active">⏳ AFK block active — ${afkBlockRemainingLabel(pet.activeAfkBlock)} left</div>`;
+        } else {
+          const blockButtons = TOKEN_BLOCKS.map((b, i) => {
+            const afford = pet.__tokens >= b.price;
+            return `<button class="mascot-afk-btn" data-block="${i}" ${afford ? '' : 'disabled'}>${b.hours}h — ${b.price}🪙</button>`;
+          }).join('');
+          afkHtml = `<div class="mascot-xp-line">Buy AFK time (tool works on its own for a while):</div><div class="mascot-afk-row">${blockButtons}</div>`;
+        }
+
         const customizeOpen = !!widgetState.customizeOpen;
         let customizeBody = '';
         if (customizeOpen) {
@@ -1153,16 +1438,29 @@
           const hatButtons = [`<button class="mascot-hat-btn${equipped === '' ? ' mascot-hat-equipped' : ''}" data-hat="">None</button>`]
             .concat(unlocked.map((h) => `<button class="mascot-hat-btn${equipped === h.id ? ' mascot-hat-equipped' : ''}" data-hat="${h.id}">${hatLabel(h)}</button>`))
             .join('');
-          const swatchesHtml = SWATCH_COLORS.map((c) => `<div class="mascot-swatch${pet.skinColor === c ? ' mascot-swatch-active' : ''}" data-color="${c}" style="background:${c};"></div>`).join('');
+          const freeSwatchesHtml = SWATCH_COLORS.map((c) => `<div class="mascot-swatch${pet.skinColor === c ? ' mascot-swatch-active' : ''}" data-color="${c}" style="background:${c};"></div>`).join('');
+          const ownedPremium = pet.purchasedSkinColors || [];
+          const premiumSwatchesHtml = PREMIUM_SWATCHES.map((s) => {
+            if (ownedPremium.indexOf(s.color) !== -1) {
+              return `<div class="mascot-swatch${pet.skinColor === s.color ? ' mascot-swatch-active' : ''}" data-color="${s.color}" style="background:${s.color};"></div>`;
+            }
+            const afford = pet.__tokens >= s.price;
+            return `<div class="mascot-swatch mascot-swatch-locked" data-buy-color="${s.color}" data-buy-price="${s.price}" style="background:${s.color};opacity:${afford ? '0.85' : '0.35'};" title="${s.price} tokens">${s.price}</div>`;
+          }).join('');
           customizeBody = `
             <div style="margin-top:8px;">
               <div class="mascot-xp-line">Hats earned so far — tap to equip:</div>
               <div class="mascot-hat-list">${hatButtons}</div>
               <div class="mascot-xp-line" style="margin-top:8px;">Skin color:</div>
-              <div class="mascot-swatch-row">${swatchesHtml}</div>
+              <div class="mascot-swatch-row">${freeSwatchesHtml}</div>
+              <div class="mascot-xp-line" style="margin-top:6px;">Premium (tokens):</div>
+              <div class="mascot-swatch-row">${premiumSwatchesHtml}</div>
             </div>`;
         }
         ownControlsHtml = `
+          <div style="margin-top:10px;">
+            ${afkHtml}
+          </div>
           <div style="margin-top:10px;">
             <div class="mascot-pill mascot-customize-toggle" id="mascot-customize-toggle">
               <span>🎨 Customize${customizeOpen ? ' ▲' : ' ▼'}</span>
@@ -1174,7 +1472,7 @@
       panel.innerHTML = `
         <div class="mascot-close-row"><button class="mascot-close-btn" id="mascot-close-btn">✕</button></div>
         <h4>${labelForPet(petKey)}'s pet — ${pet.__stage.label}</h4>
-        <div class="mascot-bank-line">Banked AFK hours: ${pet.__bankedHours.toFixed(1)} hr</div>
+        <div class="mascot-bank-line">🪙 ${Math.floor(pet.__tokens).toLocaleString()} tokens</div>
         <div class="mascot-pill-row">${pillsHtml}</div>
         ${ownControlsHtml}
       `;
@@ -1188,18 +1486,31 @@
         panel.querySelectorAll('.mascot-hat-btn').forEach((el) => {
           el.addEventListener('click', () => { setEquippedHat(petKey, el.getAttribute('data-hat') || null); });
         });
-        panel.querySelectorAll('.mascot-swatch').forEach((el) => {
+        panel.querySelectorAll('.mascot-swatch[data-color]').forEach((el) => {
           el.addEventListener('click', () => { setSkinColor(petKey, el.getAttribute('data-color')); });
+        });
+        panel.querySelectorAll('.mascot-swatch-locked').forEach((el) => {
+          el.addEventListener('click', () => {
+            const color = el.getAttribute('data-buy-color');
+            const price = parseInt(el.getAttribute('data-buy-price'), 10);
+            if (pet.__tokens >= price) purchaseSkinColor(petKey, color, price);
+          });
+        });
+        panel.querySelectorAll('.mascot-afk-btn').forEach((el) => {
+          el.addEventListener('click', () => {
+            const idx = parseInt(el.getAttribute('data-block'), 10);
+            purchaseAfkBlock(petKey, idx);
+          });
         });
       }
     } else {
       // Level 2: skill detail, own-pet-only "train this skill" control.
       const skill = widgetState.expandedSkill;
-      const hours = pet.skillXP[skill] || 0;
-      const level = levelForHours(hours);
-      const nextLevelHours = level < 99 ? hoursForLevel(level + 1) : null;
-      const currentXP = Math.round(xpForHours(hours));
-      const xpToNext = nextLevelHours !== null ? Math.round(xpForHours(nextLevelHours - hours)) : null;
+      const xp = pet.skillXP[skill] || 0;
+      const level = levelForXP(xp);
+      const nextLevelXP = level < 99 ? xpForLevel(level + 1) : null;
+      const currentXP = Math.round(xp);
+      const xpToNext = nextLevelXP !== null ? Math.round(nextLevelXP - xp) : null;
       const isActive = pet.activeSkill === skill;
 
       let trainHtml = '';
@@ -1226,26 +1537,29 @@
   }
 
   // Diffs the shared household completion total (achievements-state) to pop
-  // a single "+N hr" popup whenever it goes up — this total feeds both
-  // pets' banked hours equally (bankedHours = liveTotal - hoursAlreadyGranted
-  // per pet), so a completed task anywhere in the household shows once over
-  // the whole widget rather than once per pet.
-  function popAfkForCountsDiff(counts) {
+  // a single "+N 🪙" popup whenever it goes up — this total feeds both
+  // pets' token balances equally (tokens = liveTotal - tokensBaseline -
+  // tokensSpent per pet, and a liveTotal increase raises that identically
+  // regardless of each pet's own baseline/spent), so a completed task
+  // anywhere in the household shows once over the whole widget rather than
+  // once per pet.
+  function popTokensForCountsDiff(counts) {
     const liveTotal = sumCounts(counts || {});
     if (widgetState.seededLiveTotal) {
       const delta = liveTotal - (widgetState.prevLiveTotal || 0);
-      if (delta > 0) showAfkPopup(delta);
+      if (delta > 0) showTokenPopup(delta);
     } else {
       widgetState.seededLiveTotal = true;
     }
     widgetState.prevLiveTotal = liveTotal;
   }
 
-  // Diffs incoming skillXP (in hours) against the last-seen snapshot to pop
-  // an XP popup — same "compare consecutive snapshots client-side" pattern
-  // achievements.html already uses for its milestone celebration banner, so
-  // this fires for either pet regardless of which device actually earned
-  // the grant, not just the locally-triggered visit-grant on this page load.
+  // Diffs incoming skillXP (raw XP, granted per-action — see runVisitGrant)
+  // against the last-seen snapshot to pop an XP popup — same "compare
+  // consecutive snapshots client-side" pattern achievements.html already
+  // uses for its milestone celebration banner, so this fires for either pet
+  // regardless of which device actually earned the grant, not just the
+  // locally-triggered visit-grant on this page load.
   function popXpForSnapshotDiff(mascotData) {
     const pets = mascotData.pets || {};
     const nextSnapshot = {};
@@ -1266,7 +1580,7 @@
           const before = (prev[petKey] && prev[petKey][skill]) || 0;
           const after = nextSnapshot[petKey][skill];
           if (after <= before) return;
-          const deltaXP = xpForHours(after - before);
+          const deltaXP = after - before;
           if (deltaXP >= 1) showXpPopup(petKey, skill, deltaXP);
         });
       });
@@ -1280,6 +1594,17 @@
     if (h.kind === 'completionist') return 'Completionist';
     if (h.kind === 'max') return SKILL_LABELS[h.skill] + ' (Master)';
     return SKILL_LABELS[h.skill] + ' ' + h.tier;
+  }
+
+  // "Xh Ym left" for an active AFK block's remaining wall-clock duration.
+  function afkBlockRemainingLabel(block) {
+    const startedAtMs = block.startedAt && typeof block.startedAt.toMillis === 'function' ? block.startedAt.toMillis() : Date.now();
+    const elapsedHours = Math.max(0, (Date.now() - startedAtMs) / 3600000);
+    const remainingHours = Math.max(0, block.hours - elapsedHours);
+    const h = Math.floor(remainingHours);
+    const m = Math.round((remainingHours - h) * 60);
+    if (h <= 0 && m <= 0) return 'finishing up';
+    return (h > 0 ? h + 'h ' : '') + m + 'm';
   }
 
   // ---------------------------------------------------------------------
@@ -1328,9 +1653,16 @@
       // instead of depending on another script happening to be present.
       achievementsRef().onSnapshot((snap) => {
         const counts = (snap.exists ? snap.data() : {}).counts || {};
-        popAfkForCountsDiff(counts);
+        popTokensForCountsDiff(counts);
         widgetState.counts = counts;
         render();
+        // The grant transaction runs on every live update to this doc, not
+        // just once at page load — diffing against lastGrantedCounts is
+        // idempotent, so re-running it here (in addition to the implicit
+        // first fire this subscription already gives on page load) is what
+        // makes tiered skill XP (and the post-action prop flourish) show up
+        // in near-real-time while the page stays open, not just next visit.
+        if (widgetState.myPetKey) runVisitGrant(widgetState.myPetKey);
       }, (e) => console.error('Mascot achievement-counts subscription failed', e));
 
       // 2-frame idle animation, body only.
@@ -1346,11 +1678,6 @@
         const anyCompletionist = document.querySelector('.mascot-shimmer-bar');
         if (anyCompletionist) render();
       }, 1500);
-
-      // The AFK grant is a background side effect of this page load — fires
-      // once for the signed-in user's own pet, independent of whether the
-      // widget is ever tapped/expanded.
-      if (widgetState.myPetKey) runVisitGrant(widgetState.myPetKey);
     } catch (e) {
       console.error('Mascot widget init failed', e);
     }
