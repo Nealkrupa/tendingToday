@@ -683,10 +683,28 @@ Phone numbers are `tel:` links, emails are `mailto:` links, and there's a
 search box that filters by name/category/phone/email. Sorted alphabetically
 by name.
 
-**Subs & Bills** (`subscriptions.html`) — two independent flat lists,
-**Subscriptions** (shown first) and **Bills**, same fields on both: name,
-cost, a billing cadence, renewal date, optional category, optional notes,
-and a "Mark for cancellation" checkbox. The cadence is a custom interval —
+**Subs & Bills** (`subscriptions.html`) — four independent flat lists, in
+order: **Subscriptions**, **Amazon** (autoship), **Chewy** (autoship), and
+**Bills**. Same fields on all four: name, cost, a billing cadence, renewal
+date, optional category, optional notes, and a "Mark for cancellation"
+checkbox. A page-wide total sits above all four sections — combined item
+count plus one blended monthly/yearly figure across everything, e.g. "8
+recurring costs for $142 a month, $1,704 a year" — separate from each
+section's own cost line, since "how much am I spending overall" and "how
+much is each category" answer different questions; both reuse the same
+`costSummary()` function (called once per section, once again over all
+sections concatenated together), just with a generic "recurring cost(s)"
+noun for the page-wide one instead of a section-specific noun. The `SECTIONS`
+array drives everything generically — normalization, rendering, the add
+form, achievement keys (`<section-key>:added`) — so adding a fifth section
+later is one array entry, not scattered special-casing. Each item also has a
+"Move…" dropdown (next to its remove button) listing every *other* section —
+picking one splices the item out of its current section's array and pushes
+it, fields intact, onto the target section's array, and shifts that one
+item from the old section's `<section-key>:added` achievement count to the
+new one's (a re-categorization, not a delete+re-add, so nothing about the
+item itself — cost, cadence, notes, "marked for cancellation" — is touched).
+The cadence is a custom interval —
 `cycleUnit` (week/month/year) + `cycleInterval` (any positive integer) — not
 a fixed monthly/yearly toggle, so "every 3 months" or "every 5 weeks" is
 just `{cycleUnit: 'month', cycleInterval: 3}` / `{cycleUnit: 'week',

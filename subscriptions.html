@@ -241,6 +241,18 @@
   }
   .add-row-split .add-input { margin-bottom: 0; flex: 1; min-width: 0; }
 
+  .grand-total {
+    margin: 0 16px 16px 16px;
+    padding: 14px 18px;
+    background: var(--slate-bg);
+    border-radius: 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--slate);
+    text-align: center;
+  }
+
   .add-btn-wide {
     width: 100%;
     margin-top: 2px;
@@ -423,6 +435,29 @@
     margin-top: 6px;
   }
 
+  .item-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .move-select {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    text-align: center;
+    text-align-last: center;
+    font-size: 13px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.15s ease, background 0.15s ease;
+  }
+  .move-select:hover, .move-select:focus { opacity: 1; background: var(--slate-bg); color: var(--slate); }
   .remove-btn {
     flex-shrink: 0;
     width: 26px;
@@ -438,7 +473,6 @@
     justify-content: center;
     opacity: 0.5;
     transition: opacity 0.15s ease, background 0.15s ease;
-    margin-top: 2px;
   }
   .remove-btn:hover { opacity: 1; background: var(--rose-bg); color: var(--rose); }
 
@@ -501,6 +535,8 @@
 (function() {
   const SECTIONS = [
     { key: 'subscription', label: 'Subscriptions', eyebrow: 'Recurring Costs', singular: 'subscription', plural: 'subscriptions', placeholder: 'e.g. Netflix, Spotify' },
+    { key: 'amazon', label: 'Amazon', eyebrow: 'Autoship', singular: 'item', plural: 'items', placeholder: 'e.g. Dish soap, Paper towels' },
+    { key: 'chewy', label: 'Chewy', eyebrow: 'Autoship', singular: 'item', plural: 'items', placeholder: 'e.g. Dog food, Cat litter' },
     { key: 'bill', label: 'Bills', eyebrow: 'Recurring Costs', singular: 'bill', plural: 'bills', placeholder: 'e.g. Electric, Internet' }
   ];
 
@@ -508,7 +544,9 @@
 
   const defaultState = {
     bill: [],
-    subscription: []
+    subscription: [],
+    amazon: [],
+    chewy: []
     // each item: { id, name, cost, cycleUnit: 'week'|'month'|'year', cycleInterval, renewalDate: 'YYYY-MM-DD', category, notes, cancelPending, addedBy }
   };
 
@@ -681,6 +719,16 @@
     return `${items.length} ${noun} for ${formatMoney(totalPerMonth)} a month, ${formatMoney(totalPerYear)} a year`;
   }
 
+  // Page-wide total across every section combined (Subscriptions, Amazon,
+  // Chewy, Bills) — a separate line from each section's own cost-summary,
+  // since "how much am I spending in total" and "how much is each category"
+  // answer different questions. Reuses costSummary with a generic noun
+  // rather than duplicating the normalize-to-both-units math.
+  function grandTotalSummary() {
+    const allItems = SECTIONS.reduce((arr, sec) => arr.concat(state[sec.key]), []);
+    return costSummary(allItems, 'recurring cost', 'recurring costs');
+  }
+
   function billsSVG(fraction) {
     // A stack of receipts builds up as bills/subscriptions pile onto both
     // sections together — same staged-fade-in technique as the other pages'
@@ -721,7 +769,7 @@
     const totalItems = SECTIONS.reduce((sum, sec) => sum + state[sec.key].length, 0);
     const frac = Math.min(1, totalItems / 10);
     const lifetimeCount = window.sumAchievementCounts
-      ? window.sumAchievementCounts(achievementCounts, ['bill:added', 'subscription:added'])
+      ? window.sumAchievementCounts(achievementCounts, SECTIONS.map((sec) => sec.key + ':added'))
       : 0;
     const didIncrease = prevLifetimeCount !== null && lifetimeCount > prevLifetimeCount;
     prevLifetimeCount = lifetimeCount;
@@ -749,6 +797,9 @@
         <div class="${countClasses}"${badgeStyle} aria-label="Lifetime bills and subscriptions added">${lifetimeCount}</div>
       </div>
     </div>`;
+
+    const grandTotal = grandTotalSummary();
+    if (grandTotal) html += `<div class="grand-total">${grandTotal}</div>`;
 
     SECTIONS.forEach((sec) => {
       const items = [...state[sec.key]].sort((a, b) => a.renewalDate.localeCompare(b.renewalDate));
@@ -803,7 +854,13 @@
               </div>
               ${it.addedBy ? `<div class="added-by">Added by ${escapeHtml(it.addedBy)}</div>` : ''}
             </div>
-            <button class="remove-btn" data-remove="${sec.key}|${it.id}" aria-label="Remove">×</button>
+            <div class="item-actions">
+              <select class="move-select" data-move="${sec.key}|${it.id}" aria-label="Move to another section" title="Move to another section">
+                <option value="">Move…</option>
+                ${SECTIONS.filter((s) => s.key !== sec.key).map((s) => `<option value="${s.key}">${s.label}</option>`).join('')}
+              </select>
+              <button class="remove-btn" data-remove="${sec.key}|${it.id}" aria-label="Remove">×</button>
+            </div>
           </div>`;
         });
       }
@@ -850,6 +907,30 @@
       if (addBtn) addBtn.addEventListener('click', addItem);
       [nameInput, costInput].forEach((inp) => {
         if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addItem(); } });
+      });
+    });
+
+    app.querySelectorAll('[data-move]').forEach((el) => {
+      el.addEventListener('change', async () => {
+        const targetKey = el.value;
+        if (!targetKey) return;
+        const [sectionKey, id] = el.getAttribute('data-move').split('|');
+        if (targetKey === sectionKey) return;
+        const idx = state[sectionKey].findIndex((i) => i.id === id);
+        if (idx === -1) return;
+        const [item] = state[sectionKey].splice(idx, 1);
+        state[targetKey].push(item);
+        if (window.recordAchievement) {
+          // Moving is a re-categorization, not an add/remove of real
+          // content — the item (and all its fields) survives intact — but
+          // each section's own count still needs to reflect where things
+          // currently live, so it shifts from one section's tally to the
+          // other's the same way add/remove already does.
+          recordAchievement(sectionKey + ':added', -1);
+          recordAchievement(targetKey + ':added', 1);
+        }
+        await save();
+        render();
       });
     });
 

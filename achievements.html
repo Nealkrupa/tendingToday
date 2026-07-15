@@ -475,6 +475,8 @@
     if (key === 'contact:added') return 'Contacts added';
     if (key === 'bill:added') return 'Bills added';
     if (key === 'subscription:added') return 'Subscriptions added';
+    if (key === 'amazon:added') return 'Amazon autoship items added';
+    if (key === 'chewy:added') return 'Chewy autoship items added';
     if (key === 'cancel:completed') return 'Cancellations followed through';
     if (key.indexOf('daily:') === 0) return DAILY_LABELS[key.slice(6)] || key.slice(6);
     if (key.indexOf('zone:') === 0) return 'Zone day: ' + key.slice(5);
