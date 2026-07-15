@@ -71,6 +71,14 @@
     { color: '#2ECC71', price: 40, flair: 'shimmer', tierLabel: 'Rare' },
     { color: RAINBOW_SKIN, price: 40, flair: 'rainbow', tierLabel: 'Rare' }
   ];
+  // Looks up a skin color's flair tier — used by renderSprite to decide
+  // whether the *equipped* body itself gets a shimmer overlay, not just
+  // the picker swatch preview.
+  function skinFlairFor(color) {
+    const s = PREMIUM_SWATCHES.find((sw) => sw.color === color);
+    return s ? s.flair : null;
+  }
+
   const HAT_TIER_LEVELS = [25, 50, 75, 90]; // standard-hat unlock tiers (99 = bespoke max hat, handled separately)
 
   // ---------------------------------------------------------------------
@@ -1473,9 +1481,22 @@
     const bodyHtml = skinColor === RAINBOW_SKIN
       ? buildCyclingLayers(bodySrc, CYCLE_COLORS)
       : `<img src="${getTintedImage(bodySrc, skinColor) || bodySrc}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />`;
+    // Rare-tier ("shimmer") and rainbow skin colors get the same
+    // shimmer-bar highlight the completionist/max hats already use —
+    // previously this flair only showed up on the picker's swatch preview,
+    // never on the actually-equipped body, since the two used entirely
+    // separate rendering paths. Masked to bodySrc's own alpha channel, same
+    // mask-image + overflow:hidden clipping the hat version uses.
+    const skinFlair = skinFlairFor(skinColor);
+    const bodyShimmerHtml = (skinFlair === 'shimmer' || skinFlair === 'rainbow')
+      ? `<div class="mascot-tint-rect" style="-webkit-mask-image:url('${bodySrc}');mask-image:url('${bodySrc}');overflow:hidden;">
+          <div class="mascot-shimmer-bar" style="background:rgba(255,255,255,0.85);animation-delay:${phaseDelay(2600)};"></div>
+        </div>`
+      : '';
     container.innerHTML = `
       ${propHtml}
       ${bodyHtml}
+      ${bodyShimmerHtml}
       ${hatHtml}
     `;
   }
@@ -1648,13 +1669,21 @@
               // mapped flair name straight to a single class name).
               const hasShimmerSweep = s.flair === 'shimmer' || isRainbow;
               const flairClass = (s.flair === 'pulse' ? ' mascot-swatch-pulse' : '') + (isRainbow ? ' mascot-swatch-rainbow' : '');
-              const sweepHtml = hasShimmerSweep ? '<div class="mascot-swatch-shimmer-sweep"></div>' : '';
+              // The picker rebuilds this markup on every render (each idle
+              // tick, ~650ms, plus any customize-panel toggle) — a plain
+              // `animation:` with no delay restarts from 0% every time,
+              // which reads as a stutter/reset instead of a continuous
+              // loop. Same negative-delay/phaseDelay() continuity trick
+              // used everywhere else in the file for elements that get
+              // torn down and recreated this often.
+              const pulseStyle = s.flair === 'pulse' ? ` animation-delay:${phaseDelay(2200)};` : '';
+              const sweepHtml = hasShimmerSweep ? `<div class="mascot-swatch-shimmer-sweep" style="animation-delay:${phaseDelay(1800)};"></div>` : '';
               const bgStyle = isRainbow ? '' : `background:${s.color};`;
               if (ownedPremium.indexOf(s.color) !== -1) {
-                return `<div class="mascot-swatch${flairClass}${pet.skinColor === s.color ? ' mascot-swatch-active' : ''}" data-color="${s.color}" style="${bgStyle}">${sweepHtml}</div>`;
+                return `<div class="mascot-swatch${flairClass}${pet.skinColor === s.color ? ' mascot-swatch-active' : ''}" data-color="${s.color}" style="${bgStyle}${pulseStyle}">${sweepHtml}</div>`;
               }
               const afford = pet.__tokens >= s.price;
-              return `<div class="mascot-swatch mascot-swatch-locked${flairClass}" data-buy-color="${s.color}" data-buy-price="${s.price}" style="${bgStyle}opacity:${afford ? '0.85' : '0.35'};" title="${s.price} tokens">${sweepHtml}${s.price}</div>`;
+              return `<div class="mascot-swatch mascot-swatch-locked${flairClass}" data-buy-color="${s.color}" data-buy-price="${s.price}" style="${bgStyle}opacity:${afford ? '0.85' : '0.35'};${pulseStyle}" title="${s.price} tokens">${sweepHtml}${s.price}</div>`;
             }).join('');
             return `<div class="mascot-xp-line" style="margin-top:6px;">${g.label} (${g.price}${TOKEN_ICON}):</div><div class="mascot-swatch-row">${swatchesHtml}</div>`;
           }).join('');
