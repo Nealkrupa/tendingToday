@@ -529,6 +529,65 @@
     return out;
   }
 
+  // Builds the hat/skin-color picker markup for one pet — shared by
+  // pet-customize.html's initPetCustomizer below (the only place this still
+  // renders; the inline widget panel just links there instead, see
+  // renderPanel's ownControlsHtml).
+  function buildCustomizeMarkup(pet) {
+    const unlocked = unlockedHatsForPet(pet);
+    const equipped = pet.equippedHat || '';
+    const hatButtons = [`<button class="mascot-hat-btn${equipped === '' ? ' mascot-hat-equipped' : ''}" data-hat="">None</button>`]
+      .concat(unlocked.map((h) => `<button class="mascot-hat-btn${equipped === h.id ? ' mascot-hat-equipped' : ''}" data-hat="${h.id}">${hatLabel(h)}</button>`))
+      .join('');
+    const freeSwatchesHtml = SWATCH_COLORS.map((c) => `<div class="mascot-swatch${pet.skinColor === c ? ' mascot-swatch-active' : ''}" data-color="${c}" style="background:${c};"></div>`).join('');
+    const ownedPremium = pet.purchasedSkinColors || [];
+    // Group premium swatches by tier (Common/Uncommon/Rare) — the array is
+    // already ordered by tier, so a simple running-group reduce keeps each
+    // tier's own price + flair together for display rather than one flat
+    // "Premium" row.
+    const tierGroups = [];
+    PREMIUM_SWATCHES.forEach((s) => {
+      let group = tierGroups[tierGroups.length - 1];
+      if (!group || group.label !== s.tierLabel) {
+        group = { label: s.tierLabel, price: s.price, items: [] };
+        tierGroups.push(group);
+      }
+      group.items.push(s);
+    });
+    const premiumTiersHtml = tierGroups.map((g) => {
+      const swatchesHtml = g.items.map((s) => {
+        const isRainbow = s.color === RAINBOW_SKIN;
+        // 'rainbow' gets both its own gradient class *and* the shimmer
+        // sweep (it's the peak-tier option — previously it only got the
+        // gradient, with no shimmer at all, since this mapped flair name
+        // straight to a single class name).
+        const hasShimmerSweep = s.flair === 'shimmer' || isRainbow;
+        const flairClass = (s.flair === 'pulse' ? ' mascot-swatch-pulse' : '') + (isRainbow ? ' mascot-swatch-rainbow' : '');
+        // Rebuilt on every render — a plain `animation:` with no delay
+        // restarts from 0% every time, which reads as a stutter/reset
+        // instead of a continuous loop. Same negative-delay/phaseDelay()
+        // continuity trick used everywhere else in the file for elements
+        // that get torn down and recreated this often.
+        const pulseStyle = s.flair === 'pulse' ? ` animation-delay:${phaseDelay(2200)};` : '';
+        const sweepHtml = hasShimmerSweep ? `<div class="mascot-swatch-shimmer-sweep" style="animation-delay:${phaseDelay(1800)};"></div>` : '';
+        const bgStyle = isRainbow ? '' : `background:${s.color};`;
+        if (ownedPremium.indexOf(s.color) !== -1) {
+          return `<div class="mascot-swatch${flairClass}${pet.skinColor === s.color ? ' mascot-swatch-active' : ''}" data-color="${s.color}" style="${bgStyle}${pulseStyle}">${sweepHtml}</div>`;
+        }
+        const afford = pet.__tokens >= s.price;
+        return `<div class="mascot-swatch mascot-swatch-locked${flairClass}" data-buy-color="${s.color}" data-buy-price="${s.price}" style="${bgStyle}opacity:${afford ? '0.85' : '0.35'};${pulseStyle}" title="${s.price} tokens">${sweepHtml}${s.price}</div>`;
+      }).join('');
+      return `<div class="mascot-xp-line" style="margin-top:6px;">${g.label} (${g.price}${TOKEN_ICON}):</div><div class="mascot-swatch-row">${swatchesHtml}</div>`;
+    }).join('');
+    return `
+      <div class="mascot-xp-line">Hats earned so far — tap to equip:</div>
+      <div class="mascot-hat-list">${hatButtons}</div>
+      <div class="mascot-xp-line" style="margin-top:8px;">Skin color:</div>
+      <div class="mascot-swatch-row">${freeSwatchesHtml}</div>
+      ${premiumTiersHtml}
+    `;
+  }
+
   // Resolves an equippedHat id into asset paths + tint info for rendering.
   function resolveHat(hatId) {
     if (!hatId) return null;
@@ -844,6 +903,8 @@
       font-size: 12px;
       font-weight: 700;
       color: var(--ink, #263029);
+      text-decoration: none;
+      width: fit-content;
     }
     .mascot-pill-icon { font-size: 15px; line-height: 1; }
     .mascot-skill-detail { font-size: 13px; color: var(--ink, #263029); }
@@ -1101,6 +1162,39 @@
     return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 255, g: 255, b: 255 };
   }
 
+  // Runs a big list of cheap-to-queue-but-costly-to-run tasks (each one a
+  // getTintedImage call, which does a full getImageData/pixel-loop/putImageData
+  // pass) spread across idle time instead of all in one synchronous burst.
+  // Precomputing every color combo up front used to mean 100+ of those passes
+  // back-to-back on the main thread the instant mascot.js loaded — with no
+  // network activity involved (the source images are already cached, so it's
+  // pure CPU work), this was blocking page load/sign-in for a noticeable
+  // stretch, worse on slower CPUs (mobile) and Chrome's canvas implementation
+  // in particular. Feeding the queue a few tasks per idle slice keeps the
+  // browser free to handle the page's real work in between, at the cost of a
+  // (rare) chance the very first render needs a not-yet-reached combo and
+  // falls back to the plain source art for one frame, same as if precompute
+  // hadn't run at all yet.
+  function runIdleQueue(tasks) {
+    let i = 0;
+    function step(deadline) {
+      while (i < tasks.length && (deadline.timeRemaining() > 0 || deadline.didTimeout)) {
+        tasks[i]();
+        i++;
+      }
+      if (i < tasks.length) scheduleIdleStep(step);
+    }
+    scheduleIdleStep(step);
+  }
+
+  function scheduleIdleStep(step) {
+    if (window.requestIdleCallback) {
+      requestIdleCallback(step, { timeout: 200 });
+    } else {
+      setTimeout(() => step({ timeRemaining: () => 8, didTimeout: true }), 16);
+    }
+  }
+
   // Returns the tinted data URL if it's already been computed. Otherwise
   // kicks off the (async) computation once and returns null — render() gets
   // called again automatically the moment it's ready (see img.onload below),
@@ -1169,38 +1263,45 @@
   // for one frame — since render() fires so often (every idle-frame tick),
   // that fallback was visible as a stray light/white flash until the async
   // canvas decode finished. Precomputing every combo up front means that
-  // fallback essentially never gets hit during normal use.
+  // fallback essentially never gets hit during normal use. Only worth this
+  // exhaustive up-front cost on the dedicated customize page (see
+  // pet-customize.html / initPetCustomizer below) — the regular per-page
+  // widget only ever needs whatever color a pet is *currently* wearing,
+  // which getTintedImage's own on-demand caching already handles lazily, so
+  // this no longer runs eagerly on every page load (it used to, and that
+  // ~100+-combination synchronous canvas burst was the actual cause of the
+  // page-load stall this was tuned to avoid noticed on real devices).
   function precomputeBodyTints() {
+    const tasks = [];
     STAGES.forEach((stage) => {
       [1, 2].forEach((frame) => {
         const src = assetUrl('pet-body-' + stage.key + '-' + frame + '.png');
-        SWATCH_COLORS.forEach((color) => getTintedImage(src, color));
+        SWATCH_COLORS.forEach((color) => tasks.push(() => getTintedImage(src, color)));
         // Also warms every premium color (previously only free SWATCH_COLORS
         // were precomputed, so a freshly-purchased premium color would flash
         // the plain untinted art for one frame) and the rainbow cycle's own
         // hues, so its crossfade layers are already cached the first time
         // any pet equips it rather than fading in layer-by-layer.
-        PREMIUM_SWATCHES.forEach((s) => { if (s.color !== RAINBOW_SKIN) getTintedImage(src, s.color); });
-        CYCLE_COLORS.forEach((color) => getTintedImage(src, color));
+        PREMIUM_SWATCHES.forEach((s) => { if (s.color !== RAINBOW_SKIN) tasks.push(() => getTintedImage(src, s.color)); });
+        CYCLE_COLORS.forEach((color) => tasks.push(() => getTintedImage(src, color)));
       });
     });
+    runIdleQueue(tasks);
   }
-  precomputeBodyTints();
 
-  // Same idea for hat trims, but this can't run until achievements.js has
-  // defined window.badgePaletteForTier (paletteAt() falls back to a fixed
-  // gold color otherwise) — mascot.js's own top-level code runs before
-  // achievements.js's script tag on every real page, so this is called from
-  // initMascotWidget() instead, once auth/all scripts have resolved.
+  // Same idea for hat trims — also only called from the customize page now,
+  // for the same reason as precomputeBodyTints above.
   function precomputeHatTints() {
+    const tasks = [];
     SKILLS.forEach((skill) => {
       const trimUrl = assetUrl('hat-' + skill + '-trim.png');
-      HAT_TIER_LEVELS.forEach((tier, tierIndex) => { getTintedImage(trimUrl, paletteAt(tierIndex).edge); });
+      HAT_TIER_LEVELS.forEach((tier, tierIndex) => { tasks.push(() => getTintedImage(trimUrl, paletteAt(tierIndex).edge)); });
       const maxTrimUrl = assetUrl('hat-' + skill + '-max-trim.png');
-      getTintedImage(maxTrimUrl, paletteAt(4).edge);
+      tasks.push(() => getTintedImage(maxTrimUrl, paletteAt(4).edge));
     });
     const completionistTrimUrl = assetUrl('hat-completionist-trim.png');
-    CYCLE_COLORS.forEach((color) => getTintedImage(completionistTrimUrl, color));
+    CYCLE_COLORS.forEach((color) => tasks.push(() => getTintedImage(completionistTrimUrl, color)));
+    runIdleQueue(tasks);
   }
 
   // ---------------------------------------------------------------------
@@ -1525,7 +1626,6 @@
     myPetKey: null,
     expandedPet: null,      // null | 'userA' | 'userB'
     expandedSkill: null,    // null | skill name (Level 2)
-    customizeOpen: false,   // whether the hat/skin-color pickers are expanded
     helpOpen: false,        // whether the "?" quick-help note is expanded
     frame: 1,
     prevSkillXP: null,      // last-seen { userA: {skill: hours, ...}, userB: {...} }, for XP-popup diffing
@@ -1589,7 +1689,6 @@
         slot.addEventListener('click', () => {
           widgetState.expandedPet = widgetState.expandedPet === key ? null : key;
           widgetState.expandedSkill = null;
-          widgetState.customizeOpen = false;
           render();
         });
         ground.appendChild(slot);
@@ -1652,74 +1751,23 @@
           afkHtml = `<div class="mascot-xp-line">Buy AFK time (tool works on its own for a while):</div><div class="mascot-afk-row">${blockButtons}</div>`;
         }
 
-        const customizeOpen = !!widgetState.customizeOpen;
-        let customizeBody = '';
-        if (customizeOpen) {
-          const unlocked = unlockedHatsForPet(pet);
-          const equipped = pet.equippedHat || '';
-          const hatButtons = [`<button class="mascot-hat-btn${equipped === '' ? ' mascot-hat-equipped' : ''}" data-hat="">None</button>`]
-            .concat(unlocked.map((h) => `<button class="mascot-hat-btn${equipped === h.id ? ' mascot-hat-equipped' : ''}" data-hat="${h.id}">${hatLabel(h)}</button>`))
-            .join('');
-          const freeSwatchesHtml = SWATCH_COLORS.map((c) => `<div class="mascot-swatch${pet.skinColor === c ? ' mascot-swatch-active' : ''}" data-color="${c}" style="background:${c};"></div>`).join('');
-          const ownedPremium = pet.purchasedSkinColors || [];
-          // Group premium swatches by tier (Common/Uncommon/Rare) — the
-          // array is already ordered by tier, so a simple running-group
-          // reduce keeps each tier's own price + flair together for display
-          // rather than one flat "Premium" row.
-          const tierGroups = [];
-          PREMIUM_SWATCHES.forEach((s) => {
-            let group = tierGroups[tierGroups.length - 1];
-            if (!group || group.label !== s.tierLabel) {
-              group = { label: s.tierLabel, price: s.price, items: [] };
-              tierGroups.push(group);
-            }
-            group.items.push(s);
-          });
-          const premiumTiersHtml = tierGroups.map((g) => {
-            const swatchesHtml = g.items.map((s) => {
-              const isRainbow = s.color === RAINBOW_SKIN;
-              // 'rainbow' gets both its own gradient class *and* the
-              // shimmer sweep (it's the peak-tier option — previously it
-              // only got the gradient, with no shimmer at all, since this
-              // mapped flair name straight to a single class name).
-              const hasShimmerSweep = s.flair === 'shimmer' || isRainbow;
-              const flairClass = (s.flair === 'pulse' ? ' mascot-swatch-pulse' : '') + (isRainbow ? ' mascot-swatch-rainbow' : '');
-              // The picker rebuilds this markup on every render (each idle
-              // tick, ~650ms, plus any customize-panel toggle) — a plain
-              // `animation:` with no delay restarts from 0% every time,
-              // which reads as a stutter/reset instead of a continuous
-              // loop. Same negative-delay/phaseDelay() continuity trick
-              // used everywhere else in the file for elements that get
-              // torn down and recreated this often.
-              const pulseStyle = s.flair === 'pulse' ? ` animation-delay:${phaseDelay(2200)};` : '';
-              const sweepHtml = hasShimmerSweep ? `<div class="mascot-swatch-shimmer-sweep" style="animation-delay:${phaseDelay(1800)};"></div>` : '';
-              const bgStyle = isRainbow ? '' : `background:${s.color};`;
-              if (ownedPremium.indexOf(s.color) !== -1) {
-                return `<div class="mascot-swatch${flairClass}${pet.skinColor === s.color ? ' mascot-swatch-active' : ''}" data-color="${s.color}" style="${bgStyle}${pulseStyle}">${sweepHtml}</div>`;
-              }
-              const afford = pet.__tokens >= s.price;
-              return `<div class="mascot-swatch mascot-swatch-locked${flairClass}" data-buy-color="${s.color}" data-buy-price="${s.price}" style="${bgStyle}opacity:${afford ? '0.85' : '0.35'};${pulseStyle}" title="${s.price} tokens">${sweepHtml}${s.price}</div>`;
-            }).join('');
-            return `<div class="mascot-xp-line" style="margin-top:6px;">${g.label} (${g.price}${TOKEN_ICON}):</div><div class="mascot-swatch-row">${swatchesHtml}</div>`;
-          }).join('');
-          customizeBody = `
-            <div style="margin-top:8px;">
-              <div class="mascot-xp-line">Hats earned so far — tap to equip:</div>
-              <div class="mascot-hat-list">${hatButtons}</div>
-              <div class="mascot-xp-line" style="margin-top:8px;">Skin color:</div>
-              <div class="mascot-swatch-row">${freeSwatchesHtml}</div>
-              ${premiumTiersHtml}
-            </div>`;
-        }
+        // Hat/skin-color pickers live on their own page (pet-customize.html)
+        // rather than expanding inline here — rendering every unlocked hat
+        // and every unowned premium color's swatch (with its own tint) used
+        // to mean warming ~100+ (image, color) combinations the moment this
+        // widget mounted on *every* page, which was the actual cause of a
+        // real page-load stall. Only that dedicated page pays for the full
+        // set now; this widget only ever needs the one color/hat the pet is
+        // currently wearing, which getTintedImage's own on-demand caching
+        // already handles.
         ownControlsHtml = `
           <div style="margin-top:10px;">
             ${afkHtml}
           </div>
           <div style="margin-top:10px;">
-            <div class="mascot-pill mascot-customize-toggle" id="mascot-customize-toggle">
-              <span>🎨 Customize${customizeOpen ? ' ▲' : ' ▼'}</span>
-            </div>
-            ${customizeBody}
+            <a class="mascot-pill mascot-customize-toggle" href="pet-customize.html">
+              <span>🎨 Customize</span>
+            </a>
           </div>`;
       }
 
@@ -1750,21 +1798,6 @@
         el.addEventListener('click', () => { widgetState.expandedSkill = el.getAttribute('data-skill'); render(); });
       });
       if (isOwn) {
-        const toggle = document.getElementById('mascot-customize-toggle');
-        if (toggle) toggle.addEventListener('click', () => { widgetState.customizeOpen = !widgetState.customizeOpen; render(); });
-        panel.querySelectorAll('.mascot-hat-btn').forEach((el) => {
-          el.addEventListener('click', () => { setEquippedHat(petKey, el.getAttribute('data-hat') || null); });
-        });
-        panel.querySelectorAll('.mascot-swatch[data-color]').forEach((el) => {
-          el.addEventListener('click', () => { setSkinColor(petKey, el.getAttribute('data-color')); });
-        });
-        panel.querySelectorAll('.mascot-swatch-locked').forEach((el) => {
-          el.addEventListener('click', () => {
-            const color = el.getAttribute('data-buy-color');
-            const price = parseInt(el.getAttribute('data-buy-price'), 10);
-            if (pet.__tokens >= price) purchaseSkinColor(petKey, color, price);
-          });
-        });
         panel.querySelectorAll('.mascot-afk-btn').forEach((el) => {
           el.addEventListener('click', () => {
             const idx = parseInt(el.getAttribute('data-block'), 10);
@@ -1885,7 +1918,6 @@
       const email = user && user.email ? user.email.toLowerCase() : '';
       widgetState.myPetKey = EMAIL_TO_PET_KEY[email] || null;
 
-      precomputeHatTints();
       addResizeClampListener();
 
       // Reacts to the theme actually changing (toggle click, or theme.js's
@@ -1949,6 +1981,84 @@
       }, 1500);
     } catch (e) {
       console.error('Mascot widget init failed', e);
+    }
+  };
+
+  // ---------------------------------------------------------------------
+  // Customize page entry point (pet-customize.html) — deliberately separate
+  // from initMascotWidget/render above rather than reusing the roaming
+  // multi-pet widget's state or DOM: this only ever shows one pet (whoever's
+  // signed in) and only the hat/skin-color pickers, so it keeps its own
+  // small local state instead of dragging in expandedPet/frame/wandering
+  // concerns that don't apply here.
+  window.initPetCustomizer = function (containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    try {
+      const user = window.currentHouseholdUser;
+      const email = user && user.email ? user.email.toLowerCase() : '';
+      const petKey = EMAIL_TO_PET_KEY[email] || null;
+      if (!petKey) {
+        container.innerHTML = '<p>No pet is assigned to this account.</p>';
+        return;
+      }
+
+      // The whole point of this page: warm every color/hat combo up front,
+      // since this is the one place someone's actually about to browse all
+      // of them (see precomputeBodyTints/precomputeHatTints's own comments).
+      precomputeBodyTints();
+      precomputeHatTints();
+
+      let mascotDoc = null;
+      let counts = null;
+
+      function currentPet() {
+        const raw = (mascotDoc && mascotDoc.pets && mascotDoc.pets[petKey]) || defaultPet(petKey);
+        const pet = Object.assign(defaultPet(petKey), raw);
+        pet.__tokens = computeTokens(pet, sumCounts(counts || {}));
+        return pet;
+      }
+
+      function renderCustomizer() {
+        if (!mascotDoc && !counts) return; // wait for first data from both subscriptions
+        const pet = currentPet();
+        container.innerHTML = `
+          <div class="mascot-bank-line">${TOKEN_ICON} ${Math.floor(pet.__tokens).toLocaleString()} tokens</div>
+          ${buildCustomizeMarkup(pet)}
+        `;
+        container.querySelectorAll('.mascot-hat-btn').forEach((el) => {
+          el.addEventListener('click', () => { setEquippedHat(petKey, el.getAttribute('data-hat') || null); });
+        });
+        container.querySelectorAll('.mascot-swatch[data-color]').forEach((el) => {
+          el.addEventListener('click', () => { setSkinColor(petKey, el.getAttribute('data-color')); });
+        });
+        container.querySelectorAll('.mascot-swatch-locked').forEach((el) => {
+          el.addEventListener('click', () => {
+            const color = el.getAttribute('data-buy-color');
+            const price = parseInt(el.getAttribute('data-buy-price'), 10);
+            if (pet.__tokens >= price) purchaseSkinColor(petKey, color, price);
+          });
+        });
+      }
+
+      mascotRef().onSnapshot((snap) => {
+        mascotDoc = snap.exists ? snap.data() : {};
+        renderCustomizer();
+      }, (e) => console.error('Pet customizer mascot-state subscription failed', e));
+
+      achievementsRef().onSnapshot((snap) => {
+        counts = (snap.exists ? snap.data() : {}).counts || {};
+        renderCustomizer();
+      }, (e) => console.error('Pet customizer achievement-counts subscription failed', e));
+
+      // Keeps premium-color shimmer/pulse animations and the completionist
+      // cycle looking continuous across re-renders, same reason
+      // initMascotWidget re-renders periodically for its own shimmer bar.
+      setInterval(() => {
+        if (container.querySelector('.mascot-swatch-pulse, .mascot-swatch-rainbow, .mascot-swatch-shimmer-sweep')) renderCustomizer();
+      }, 1500);
+    } catch (e) {
+      console.error('Pet customizer init failed', e);
     }
   };
 })();

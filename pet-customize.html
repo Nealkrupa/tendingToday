@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Customize Your Pet</title>
+<link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="shortcut icon" href="/favicon.ico" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-title" content="TendingToday" />
+<link rel="manifest" href="/site.webmanifest" />
+<meta name="theme-color" content="#EEF1EA" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root{
+    --bg: #EEF1EA;
+    --card: #FFFFFF;
+    --ink: #263029;
+    --muted: #6B7568;
+    --line: #DDE3D6;
+    --sage: #7C9075;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+  }
+
+  #app {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 20px 20px 48px 20px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #1B211C;
+    --card: #242B24;
+    --ink: #E7ECE4;
+    --muted: #9AA69A;
+    --line: #333D33;
+    --sage: #8FAE85;
+  }
+
+  #back-link {
+    display: inline-block;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 13px;
+    text-decoration: none;
+    padding: 0 0 16px 0;
+    font-family: inherit;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 22px;
+    margin: 0 0 4px 0;
+    letter-spacing: -0.01em;
+  }
+
+  .subhead {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 0 20px 0;
+  }
+
+  #pet-customize-root {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: 0 2px 10px rgba(38,48,41,0.08);
+  }
+
+  #pet-customize-root p {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 0;
+  }
+</style>
+</head>
+<body style="margin:0;">
+<script src="theme.js?v=1"></script>
+<script src="priority-alert.js?v=4"></script>
+<script src="cancel-alert.js?v=1" defer></script>
+<script src="mascot.js?v=46" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
+<script src="auth.js?v=2"></script>
+<script src="visits.js?v=1"></script>
+<div id="app">
+  <a id="back-link" href="home.html">‹ Back</a>
+  <h1>Customize Your Pet</h1>
+  <p class="subhead">Pick a hat and skin color — changes sync live to your pet everywhere.</p>
+  <div id="pet-customize-root"><p>Loading…</p></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+(function () {
+  const backLink = document.getElementById('back-link');
+  if (document.referrer && document.referrer.indexOf(location.origin) === 0) {
+    backLink.href = document.referrer;
+  }
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAzJ9EFIGW1l5-IgmrD2MyGTe8_WIcL3hs",
+    authDomain: "tendingtoday-f30e4.firebaseapp.com",
+    projectId: "tendingtoday-f30e4",
+    storageBucket: "tendingtoday-f30e4.firebasestorage.app",
+    messagingSenderId: "334824670755",
+    appId: "1:334824670755:web:c21c47bc292f8ed711d396"
+  };
+  firebase.initializeApp(firebaseConfig);
+
+  requireHouseholdAuth(function () {
+    initTheme();
+    initPriorityAlertBanner();
+    initCancelAlertBanner();
+    initPetCustomizer('pet-customize-root');
+  });
+})();
+});
+</script>
+</body>
+</html>
