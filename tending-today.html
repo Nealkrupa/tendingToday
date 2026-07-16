@@ -13,9 +13,10 @@
 <meta name="theme-color" content="#EEF1EA" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap');
-
   :root{
     --bg: #EEF1EA;
     --card: #FFFFFF;
@@ -330,17 +331,18 @@
 <body style="margin:0;">
 <script src="theme.js?v=1"></script>
 <script src="priority-alert.js?v=4"></script>
-<script src="cancel-alert.js?v=1"></script>
-<script src="mascot.js?v=43"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="cancel-alert.js?v=1" defer></script>
+<script src="mascot.js?v=43" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
 <script src="auth.js?v=1"></script>
 <script src="visits.js?v=1"></script>
-<script src="achievements.js?v=5"></script>
+<script src="achievements.js?v=5" defer></script>
 <div id="app"></div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function () {
 (function() {
   const ZONES = [
     { day: 0, name: 'Living Spaces + Dust', room: 'Sunday', task: 'Dust visible surfaces in all 3 living areas' },
@@ -746,6 +748,7 @@
     }, 5 * 60 * 1000);
   });
 })();
+});
 </script>
 
 </body>

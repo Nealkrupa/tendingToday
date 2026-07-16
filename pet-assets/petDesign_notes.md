@@ -369,11 +369,16 @@ no dedicated page needed for this either.
   each with current life-stage body + equipped hat + active-skill prop,
   idling.
 - **Level 1 — tap/touch a pet:** expands to show 3 pills, one per skill.
-  Each pill contains a small art icon representing that skill and the
-  pet's current level in it, as a number, to the right of the icon. The
-  icon reuses the already-planned active-skill prop art (axe/rod/trowel) —
-  no new icon assets needed, same image just doubling as both "what the pet
-  is holding while working" and "the UI symbol for that skill." This level
+  Each pill contains a small icon representing that skill and the pet's
+  current level in it, as a number, to the right of the icon. Originally
+  planned to reuse the active-skill prop art (axe/rod/trowel) as this
+  icon, so no new icon assets would be needed — **superseded: shipped
+  with a plain emoji per skill instead** (`SKILL_EMOJI`,
+  [mascot.js:46](../mascot.js), 🪓/🪴/🐟), also reused for the XP popup
+  and the skill-detail panel header. Prop PNGs render only as the
+  in-sprite held-tool overlay now, never at icon size — see
+  [petCosmetics_notes.md](petCosmetics_notes.md)'s "Icon use for art
+  assets that double as icons" for the current icon approach. This level
   also shows the pet's currently banked AFK hours, once, above/alongside
   the pill row — it's a pet-level resource (fuels whichever skill is
   active, not owned by any one skill), so it doesn't belong nested inside
@@ -522,7 +527,10 @@ which is otherwise flat per `notes.md`'s file structure table.
 
 **Active-skill props (3) — `prop-{skill}.png`:**
 `prop-woodcutting.png`, `prop-gardening.png`, `prop-fishing.png`
-(also doubles as the Level 1 pill icon — no separate icon files needed.)
+(originally planned to also double as the Level 1 pill icon — **superseded,
+see the note in "Expanded widget UI" above:** pill/popup/panel icons
+shipped as plain emoji instead, so these render only as the in-sprite
+held-tool overlay.)
 
 **Extends cleanly for a future skill** (e.g. mining): just 5 more files
 following the same pattern — `prop-mining.png`, `hat-mining-base.png`,
