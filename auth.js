@@ -61,7 +61,7 @@
       margin: 0 0 22px 0;
       line-height: 1.5;
     }
-    #auth-gate-btn {
+    #auth-gate-btn, #auth-gate-retry {
       display: inline-flex;
       align-items: center;
       gap: 10px;
@@ -76,7 +76,7 @@
       cursor: pointer;
       transition: border-color 0.15s ease;
     }
-    #auth-gate-btn:hover { border-color: var(--sage, #7C9075); }
+    #auth-gate-btn:hover, #auth-gate-retry:hover { border-color: var(--sage, #7C9075); }
     #auth-gate-signout {
       display: inline-block;
       margin-top: 16px;
@@ -104,6 +104,7 @@
         <p>${message}</p>
         ${mode === 'signin' ? `<button id="auth-gate-btn" type="button">Sign in with Google</button>` : ''}
         ${mode === 'denied' ? `<button id="auth-gate-signout" type="button">Sign out and try a different account</button>` : ''}
+        ${mode === 'stuck' ? `<button id="auth-gate-retry" type="button">Reload</button>` : ''}
       </div>
     `;
     if (mode === 'signin') {
@@ -120,6 +121,11 @@
         firebase.auth().signOut();
       });
     }
+    if (mode === 'stuck') {
+      document.getElementById('auth-gate-retry').addEventListener('click', () => {
+        location.reload();
+      });
+    }
   }
 
   function hideGate() {
@@ -129,7 +135,16 @@
 
   window.requireHouseholdAuth = function (onReady) {
     showGate('Checking your sign-in status\u2026', 'loading');
+    // Some mobile browsers (notably iOS home-screen web apps and some mobile
+    // Chrome configurations) can silently fail to resolve Firebase Auth's
+    // persisted session check, leaving onAuthStateChanged's callback never
+    // firing and this loading card stuck forever with no error. This watchdog
+    // turns that silent hang into a visible, recoverable state instead.
+    const stuckTimer = setTimeout(() => {
+      showGate('Sign-in check is taking longer than expected. This can happen on some mobile browsers.', 'stuck');
+    }, 8000);
     firebase.auth().onAuthStateChanged((user) => {
+      clearTimeout(stuckTimer);
       if (!user) {
         showGate('This is a private household site. Sign in with an approved Google account to continue.', 'signin');
         return;
