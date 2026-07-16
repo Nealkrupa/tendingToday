@@ -29,6 +29,17 @@ doc already uses.
   cropped-down asset. `prop-*.png` renders only as the in-sprite
   held-tool overlay (`mascot.js:1482`), never at icon size.
 
+**Implementation note that applies to every idea below:** any new tintable
+cosmetic should recolor through the existing `getTintedImage(srcUrl, color)`
+in `mascot.js`, not a new ad hoc canvas/tinting path. That function already
+persists every computed tint to `localStorage` (keyed purely on
+`srcUrl|color`, with no notion of what kind of asset it's for — see
+petDesign_notes.md's "Tints persisted to localStorage" section) so any
+future body set, hat, or other recolorable art gets the once-ever-per-
+browser caching for free. A parallel tinting path would silently lose that
+and reintroduce the exact page-load-stall/flash problems that function was
+built to fix.
+
 ## Buyable bodies (egg → alternate body art set)
 
 Idea: player spends tokens (or some other currency) on an "egg" that

@@ -1195,14 +1195,50 @@
     }
   }
 
-  // Returns the tinted data URL if it's already been computed. Otherwise
-  // kicks off the (async) computation once and returns null — render() gets
-  // called again automatically the moment it's ready (see img.onload below),
-  // so callers should fall back to the plain source image for that one
-  // in-between frame.
+  // Persists computed tints to localStorage, one entry per (image, color)
+  // key, so a given combo only ever needs its canvas pass once *per
+  // browser*, not once per page load. Without this, moving precompute off
+  // the critical path (see runIdleQueue above) traded the old page-load
+  // stall for a recurring one-frame flash of plain untinted art every time
+  // a color got used again on a fresh load — the tint itself is
+  // deterministic and never needs invalidating (a given srcUrl+color pair's
+  // correct output never changes), and `srcUrl` already carries mascot.js's
+  // own ASSET_VERSION, so a future art replacement naturally busts this via
+  // a new URL rather than serving stale pixels. One key per entry (not one
+  // big JSON blob) so writing a new tint never has to re-serialize every
+  // previously cached one.
+  const TINT_STORAGE_PREFIX = 'mascotTint:';
+  function getStoredTint(key) {
+    try {
+      return localStorage.getItem(TINT_STORAGE_PREFIX + key);
+    } catch (e) {
+      return null;
+    }
+  }
+  function storeTint(key, dataUrl) {
+    try {
+      localStorage.setItem(TINT_STORAGE_PREFIX + key, dataUrl);
+    } catch (e) {
+      // Best-effort only — quota exceeded or storage unavailable (private
+      // browsing, etc.) just means this combo re-flashes on next load
+      // instead of loading instantly. Never fatal.
+    }
+  }
+
+  // Returns the tinted data URL if it's already been computed (in-memory or
+  // persisted from an earlier page load). Otherwise kicks off the (async)
+  // computation once and returns null — render() gets called again
+  // automatically the moment it's ready (see img.onload below), so callers
+  // should fall back to the plain source image for that one in-between
+  // frame.
   function getTintedImage(srcUrl, tintColor) {
     const key = srcUrl + '|' + tintColor;
     if (tintCache[key]) return tintCache[key];
+    const stored = getStoredTint(key);
+    if (stored) {
+      tintCache[key] = stored;
+      return stored;
+    }
     if (!tintPending[key]) {
       tintPending[key] = true;
       const img = new Image();
@@ -1226,7 +1262,9 @@
           data[i + 2] = Math.round((data[i + 2] / 255) * tint.b);
         }
         ctx.putImageData(imageData, 0, 0);
-        tintCache[key] = canvas.toDataURL();
+        const dataUrl = canvas.toDataURL();
+        tintCache[key] = dataUrl;
+        storeTint(key, dataUrl);
         delete tintPending[key];
         render();
       };

@@ -425,6 +425,30 @@ page since its live counts never arrived.
   image per color in the cycle, all sharing one crossfade `@keyframes`
   animation staggered by `animation-delay` so exactly one layer is ever at
   full opacity at a time.
+- **Tints persist across page loads, not just within one.** Going lazy
+  (above) traded the old page-load stall for a smaller but recurring
+  regression: every color/hat combo re-flashed its plain untinted frame for
+  one render on every fresh page load, forever, since the in-memory
+  `tintCache` starts empty each time. `getTintedImage()` now also checks
+  `localStorage` (key `mascotTint:<srcUrl>|<color>`) before falling back to
+  the async canvas pass, and writes every freshly computed tint there too —
+  one `localStorage` key per combo, not one big JSON blob, so adding a new
+  cached tint never has to re-serialize every previously cached one. A
+  given (image, color) pair's correct output never changes, and `srcUrl`
+  already carries `ASSET_VERSION`, so a future art replacement busts this
+  automatically via a new URL rather than ever needing manual invalidation.
+  Wrapped in try/catch so a full or unavailable `localStorage` (private
+  browsing, quota) just means that one combo re-flashes next load instead
+  of failing anything. **This covers every current tinted asset already**
+  (body art, hat trims, the completionist/rainbow cycling layers) because
+  they all call this one shared function — there's no separate tinting or
+  caching path anywhere in the file. It also covers **any future
+  customization slot for free**: the cache doesn't know or care what kind
+  of asset it's tinting, only the `(srcUrl, color)` pair, so a future
+  buyable-body set, tool skins, or any other tintable cosmetic (see
+  `pet-assets/petCosmetics_notes.md`'s open ideas) gets the same
+  once-ever-per-browser caching automatically, as long as it's rendered
+  through `getTintedImage()` rather than a new ad hoc path.
 - **Two pets, one household:** both pets earn skill XP and tokens
   independently off the same shared completion total (like two meters
   reading the same water main), so total pet output roughly doubles versus a

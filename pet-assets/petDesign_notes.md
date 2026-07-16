@@ -1377,3 +1377,41 @@ like a real page rather than a bare picker bolted onto a link.
   exactly the feature this static preview exists to show off — swap
   `showProp: false` for "render whatever tool skin is equipped, statically"
   rather than continuing to hide the prop outright.
+
+## Tints persisted to localStorage (shipped)
+
+Going lazy (see the precompute section above) fixed the page-load stall but
+introduced a smaller, ongoing regression: since `getTintedImage`'s in-memory
+`tintCache` starts empty on every fresh page load, every color/hat combo
+flashed its plain untinted frame for one render *every single time*, not
+just the very first time ever — noticeably worse than before, since it used
+to never flash at all (everything was pre-warmed).
+
+- **Fix:** `getTintedImage` now checks `localStorage` (one key per combo,
+  `mascotTint:<srcUrl>|<color>`) before starting the canvas pass, and writes
+  every freshly computed tint there too. A given (image, color) pair's
+  correct output is deterministic and never needs invalidating, and
+  `srcUrl` already carries `ASSET_VERSION`, so replacing the underlying art
+  later busts the cache automatically via a new URL — no expiry logic
+  needed. One `localStorage` key per combo rather than one shared JSON
+  blob, specifically so writing a new tint never has to re-serialize every
+  tint cached before it (that would've reintroduced a smaller version of
+  the exact perf problem this whole line of fixes started with). Wrapped
+  in try/catch — a full or unavailable `localStorage` (private browsing,
+  quota) just means that one combo flashes again next load, nothing breaks.
+- **Verified:** a two-pass test (mocked Firestore + mascot.js, no real
+  network) confirmed the exact intended behavior — pass one starts with no
+  `localStorage` entry, flashes once, and persists a ~700-byte entry after
+  settling; pass two (simulating a fresh page load against that same
+  `localStorage`) shows the sprite's `<img src>` as a `data:` URL the
+  instant `initPetCustomizer` returns, before any async work could
+  possibly have finished — i.e., zero flash from the second load onward.
+- **Already covers everything tintable, current and future.** Body art,
+  hat trims, and the completionist/rainbow cycling layers all flow through
+  this one `getTintedImage()` function — there is no second tinting or
+  caching path anywhere in `mascot.js`. The cache key is purely
+  `(srcUrl, color)`, with no notion of *what kind* of cosmetic it's for, so
+  any future tintable customization slot — a buyable-body set, tool skins,
+  anything else from `pet-assets/petCosmetics_notes.md`'s open ideas —
+  gets this same once-ever-per-browser persistence for free, provided it's
+  rendered through `getTintedImage()` rather than a new ad hoc path.
