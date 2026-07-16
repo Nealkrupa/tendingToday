@@ -1514,7 +1514,17 @@
     motion.x = snappedLeft;
   }
 
-  function renderSprite(container, pet, frame, isWalking) {
+  // showProp defaults to true (the roaming widget's own sprites) — the
+  // customize page's static large preview passes false, since a still
+  // preview showing a mid-swing tool reads as a rendering glitch rather
+  // than the working flourish it is in the live widget. NOTE for later: if
+  // tool *skins* (alternate prop art, not just the existing per-skill
+  // fixed prop) ever ship, that preview is exactly where someone would want
+  // to see them equipped/compared — this suppression would need to flip to
+  // "show the currently-equipped tool skin, statically, no swing animation"
+  // rather than fully hiding the prop.
+  function renderSprite(container, pet, frame, isWalking, showProp) {
+    if (showProp === undefined) showProp = true;
     const stage = pet.__stage;
     const skinColor = pet.skinColor || '#5B7B9A';
     const bodySrc = assetUrl('pet-body-' + stage.key + '-' + frame + '.png');
@@ -1577,7 +1587,7 @@
     // own fixed window, so by the time walking stops there's nothing left
     // to show.
     let propHtml = '';
-    const working = isActionFlourishing(pet) || (isAfkBlockWorking(pet) && !isWalking);
+    const working = showProp && (isActionFlourishing(pet) || (isAfkBlockWorking(pet) && !isWalking));
     if (pet.activeSkill && working) {
       const propAnchor = PROP_ANCHORS[pet.activeSkill];
       const propSrc = assetUrl('prop-' + pet.activeSkill + '.png');
@@ -1991,9 +2001,14 @@
   // signed in) and only the hat/skin-color pickers, so it keeps its own
   // small local state instead of dragging in expandedPet/frame/wandering
   // concerns that don't apply here.
-  window.initPetCustomizer = function (containerId) {
-    const container = document.getElementById(containerId);
+  //
+  // opts: { pickerContainerId, previewSpriteId, previewGroundId }. The
+  // preview args are optional — omit them to render only the picker.
+  window.initPetCustomizer = function (opts) {
+    const container = document.getElementById(opts.pickerContainerId);
     if (!container) return;
+    const previewSprite = opts.previewSpriteId ? document.getElementById(opts.previewSpriteId) : null;
+    const previewGround = opts.previewGroundId ? document.getElementById(opts.previewGroundId) : null;
     try {
       const user = window.currentHouseholdUser;
       const email = user && user.email ? user.email.toLowerCase() : '';
@@ -2011,11 +2026,21 @@
 
       let mascotDoc = null;
       let counts = null;
+      let previewFrame = 1;
 
+      // Mirrors computeDerivedPets' per-pet shape (shared household life
+      // stage + per-pet tokens) without dragging in the roaming widget's
+      // widgetState — this page only ever needs one pet.
       function currentPet() {
-        const raw = (mascotDoc && mascotDoc.pets && mascotDoc.pets[petKey]) || defaultPet(petKey);
+        const data = mascotDoc || {};
+        const liveTotal = sumCounts(counts || {});
+        const monthKey = currentMonthKey();
+        const baselineTotal = data.monthKey === monthKey ? (data.baselineTotal || 0) : liveTotal;
+        const stage = stageForProgress(Math.max(0, liveTotal - baselineTotal));
+        const raw = (data.pets && data.pets[petKey]) || defaultPet(petKey);
         const pet = Object.assign(defaultPet(petKey), raw);
-        pet.__tokens = computeTokens(pet, sumCounts(counts || {}));
+        pet.__stage = stage;
+        pet.__tokens = computeTokens(pet, liveTotal);
         return pet;
       }
 
@@ -2039,6 +2064,21 @@
             if (pet.__tokens >= price) purchaseSkinColor(petKey, color, price);
           });
         });
+        renderPreview(pet);
+      }
+
+      // Large static preview: same renderSprite() the roaming widget uses,
+      // just at a bigger box size (pure CSS — renderSprite itself has no
+      // notion of scale, everything's already percentage-sized to its
+      // container) and with showProp=false so no tool ever appears — this
+      // is a "how does your pet currently look" preview, not a live
+      // simulation, so wandering and the tool-working animation are both
+      // deliberately off. The 2-frame idle body animation (the same subtle
+      // breathing swap the roaming widget does) is the one animation kept,
+      // via its own tick below.
+      function renderPreview(pet) {
+        if (!previewSprite) return;
+        renderSprite(previewSprite, pet, previewFrame, false, false);
       }
 
       mascotRef().onSnapshot((snap) => {
@@ -2057,6 +2097,37 @@
       setInterval(() => {
         if (container.querySelector('.mascot-swatch-pulse, .mascot-swatch-rainbow, .mascot-swatch-shimmer-sweep')) renderCustomizer();
       }, 1500);
+
+      // Same 2-frame idle body swap as the roaming widget's own tick —
+      // this is the one piece of "motion" the static preview keeps.
+      if (previewSprite) {
+        setInterval(() => {
+          previewFrame = previewFrame === 1 ? 2 : 1;
+          if (mascotDoc || counts) renderPreview(currentPet());
+        }, 650);
+      }
+
+      // Theme-aware ground background behind the preview — same two-layer
+      // instant-toggle technique applyGroundTexture() uses for the roaming
+      // widget's own ground strip (both tiles mounted/decoded up front, a
+      // theme change just flips which one is opaque).
+      if (previewGround) {
+        previewGround.innerHTML = `
+          <div class="pet-preview-ground-layer" id="pet-preview-ground-light" style="background-image:url('${assetUrl('ground-tile-light-mode.png')}');"></div>
+          <div class="pet-preview-ground-layer" id="pet-preview-ground-dark" style="background-image:url('${assetUrl('ground-tile-dark-mode.png')}');"></div>
+        `;
+        const applyPreviewGroundTheme = function () {
+          const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+          document.getElementById('pet-preview-ground-light').style.opacity = theme === 'light' ? '1' : '0';
+          document.getElementById('pet-preview-ground-dark').style.opacity = theme === 'dark' ? '1' : '0';
+        };
+        applyPreviewGroundTheme();
+        const previousOnThemeChange = window.onThemeChange;
+        window.onThemeChange = function (theme) {
+          if (typeof previousOnThemeChange === 'function') previousOnThemeChange(theme);
+          applyPreviewGroundTheme();
+        };
+      }
     } catch (e) {
       console.error('Pet customizer init failed', e);
     }

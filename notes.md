@@ -20,12 +20,13 @@ Put all of these in the same folder on your site:
 | `house-projects.html` | Home improvement projects with checklists, budgets & material costs |
 | `contacts.html` | Address book with tap-to-call / tap-to-email |
 | `achievements.html` | Star Board — ever-growing gold star sticker board of completions |
+| `pet-customize.html` | Hat/skin-color picker for your own pet — reached via the mascot widget's "🎨 Customize" link, not a hub card |
 | `auth.js` | Shared Google Sign-In gate used by every page except `index.html` |
 | `visits.js` | Shared visit-counter used by every page except `index.html` — powers the hub's most-visited sort |
 | `theme.js` | Shared dark mode toggle used by every page except `index.html` |
 | `achievements.js` | Shared completion tracker used by every content page — powers the Star Board and each page's own permanent lifetime count next to its header icon |
 | `priority-alert.js` | Shared banner used by every page except `index.html` — flags unresolved Critical/High priority notes |
-| `mascot.js` | Shared household mascot widget used by every content page — persistent pixel-art pet per household member, docked at the bottom of the screen |
+| `mascot.js` | Shared household mascot widget used by every content page (also loaded by `pet-customize.html`) — persistent pixel-art pet per household member, docked at the bottom of the screen |
 
 **Important:** `index.html` is intentionally kept separate and minimal since
 this is your personal site's domain — it's just a plain-text directory link
@@ -405,29 +406,81 @@ page since its live counts never arrived.
   (`getTintedImage()`): draw the source PNG once, scale each opaque pixel's
   grayscale value by the target color's channels (the same math a CSS
   multiply blend would do), and cache the result as a data URL per (image,
-  color) pair — every plausible combination is precomputed up front so
-  nothing waits on an async decode mid-render. Since canvas-tinted images
-  are static, "smooth" color-cycling (the completionist hat's trim, and the
-  Rainbow skin) is simulated rather than a true per-pixel interpolation:
-  `buildCyclingLayers()` stacks one pre-tinted image per color in the cycle,
-  all sharing one crossfade `@keyframes` animation staggered by
-  `animation-delay` so exactly one layer is ever at full opacity at a time.
+  color) pair. Every plausible (image, color) combination used to be
+  precomputed up front on every page load so nothing ever waited on an async
+  decode mid-render — but warming ~100+ combinations synchronously the
+  moment `mascot.js` loaded turned out to be the actual cause of a real
+  page-load stall (a long CPU-bound stretch with zero network activity,
+  worse on Chrome and dramatically worse on mobile). That exhaustive
+  precompute (`precomputeBodyTints`/`precomputeHatTints`) now only runs on
+  `pet-customize.html`, spread across idle time via `requestIdleCallback`
+  (see `runIdleQueue`) rather than all at once — the one place someone's
+  actually about to browse every option. Everywhere else, the widget only
+  ever tints whatever color/hat a pet is *currently* wearing, via the same
+  `getTintedImage()` lazy on-demand path (falls back to the plain untinted
+  frame for one render if that exact combo isn't cached yet). Since
+  canvas-tinted images are static, "smooth" color-cycling (the completionist
+  hat's trim, and the Rainbow skin) is simulated rather than a true
+  per-pixel interpolation: `buildCyclingLayers()` stacks one pre-tinted
+  image per color in the cycle, all sharing one crossfade `@keyframes`
+  animation staggered by `animation-delay` so exactly one layer is ever at
+  full opacity at a time.
 - **Two pets, one household:** both pets earn skill XP and tokens
   independently off the same shared completion total (like two meters
   reading the same water main), so total pet output roughly doubles versus a
   single-pet system — a deliberate tradeoff, not an oversight. Life stage is
   the one thing kept shared, since it's derived from one household-wide
   monthly baseline rather than anything either pet does individually.
-- **Widget interaction** is progressive disclosure, all within the
-  persistent widget — no dedicated page: tap a pet to see its 3 skill
+- **Widget interaction** is progressive disclosure within the persistent
+  widget for everything except cosmetics: tap a pet to see its 3 skill
   levels plus its token balance, a circular "?" button that reveals a brief
   explainer of what tokens/AFK time/skin colors/hats do, and tap a skill
   pill to see that skill's full XP progress and, only on your own pet, a
-  "train this skill" control. Setting a skill active, buying AFK time or a
-  skin color, and equipping a hat/color are the user-initiated writes in the
+  "train this skill" control. Setting a skill active and buying AFK time are
+  user-initiated writes handled right there in the widget panel.
+- **Hat/skin-color picker lives on its own page**, `pet-customize.html`,
+  reached via a "🎨 Customize" link inside your own pet's panel (own-pet-only,
+  same as the rest of the pet-editing controls) — not a hub card, since it's
+  only ever reached from the widget itself. This used to be an expandable
+  section inline in the panel, but rendering every unlocked hat and every
+  premium color's swatch (each with its own canvas-tinted preview) on every
+  page load meant warming ~100+ tint combinations up front just in case
+  someone tapped "Customize" — see the tinting note above for why that was
+  actually a real page-load bottleneck, not just a theoretical one. Moving
+  the picker to its own page means the exhaustive precompute only runs when
+  someone's actually there to use it; every other page only ever needs the
+  one color/hat combo the pet is currently wearing. The page reuses
+  `mascot.js`'s existing helpers directly (`window.initPetCustomizer`,
+  `setEquippedHat`/`setSkinColor`/`purchaseSkinColor`, the same
+  `household/mascot-state` writes) rather than duplicating any logic, and its
+  back button (same circular icon-button treatment as every other page's
+  home button, just with a back-arrow glyph) defaults to `home.html` but
+  upgrades to `document.referrer` when that's same-origin, so it returns you
+  to whichever page you actually came from. Setting a skill active, buying
+  AFK time, and equipping a hat/color are the user-initiated writes in the
   system beyond life stage — each updates only that one field on your own
   pet, never the whole `pets` map, so it can't clobber the other person's
   pet state.
+- **Large static preview on the customize page:** below the picker,
+  `pet-customize.html` shows the pet at a much bigger scale (180×180px vs.
+  the roaming widget's 56×56px) than anywhere else on the site, sitting in
+  the page's normal scrolling flow near the bottom (not a fixed overlay) —
+  a themed, similarly-scaled-up ground strip renders behind it using the
+  same two-layer light/dark tile technique the roaming widget's own ground
+  strip uses, and a dedicated spacer after it guarantees room to scroll and
+  see the whole thing regardless of viewport quirks. It's rendered with
+  `renderSprite()` — the exact same function the roaming widget uses,
+  since that function was already scale-agnostic (pure percentage sizing
+  within whatever box it's given) — just with a new `showProp` parameter
+  passed as `false`, so the tool/prop never appears: a still preview mid-
+  swing would read as a rendering glitch, not the deliberate flourish it is
+  live. The one animation kept is the same 2-frame idle breathing swap the
+  roaming widget does; no wandering, no tool-working animation. **Note for
+  later:** if tool *skins* (alternate prop art, not just the existing
+  fixed-per-skill prop) ever ship, this preview is exactly where someone
+  would want to see them equipped/compared — `showProp: false` would need
+  to become "show the currently-equipped tool skin, statically" instead of
+  hiding the prop outright.
 - **Wandering:** the widget is a full-width, short ground strip rather than
   a small fixed corner cluster — kept short specifically so it still
   clears centered bottom-of-page controls like home.html's dark mode

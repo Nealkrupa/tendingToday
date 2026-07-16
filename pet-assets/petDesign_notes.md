@@ -1298,3 +1298,82 @@ Two more follow-ups, both in `mascot.js`.
   markup and confirmed a standalone "Legendary (80🪙️)" group containing
   only the rainbow swatch, separate from "Rare (40🪙️)"'s two static
   colors.
+
+## Hat/skin-color picker moved to its own page (shipped)
+
+The Customize panel (hat buttons + free/premium/legendary skin-color
+swatches) no longer expands inline inside the widget — it's now
+`pet-customize.html`, a standalone page reached via a "🎨 Customize" link in
+your own pet's panel.
+
+- **Why:** `precomputeBodyTints()`/`precomputeHatTints()` eagerly warmed
+  every (image, color) combination the Customize panel could ever need —
+  every life stage × every free/premium/legendary color, plus every hat tier
+  × every skill — the instant `mascot.js` loaded, on *every* page, whether
+  or not anyone ever opened the panel. That's 100+ synchronous canvas
+  tint passes (`getImageData`/pixel-loop/`putImageData`/`toDataURL` each)
+  burning real main-thread time with zero network activity involved — this
+  turned out to be the actual cause of a page-load stall noticed on real
+  devices (worse in Chrome than Firefox, much worse on mobile CPUs), not
+  anything network- or script-loading-related.
+- **Fix:** both precompute functions now only run from the new
+  `window.initPetCustomizer()` entry point on `pet-customize.html`, and even
+  there they're spread across idle time via `requestIdleCallback`
+  (`runIdleQueue`) rather than blocking in one burst. Every other page's
+  widget only ever needs the color/hat combo a pet is *currently* wearing —
+  one or two combos, not a hundred — which `getTintedImage()`'s existing
+  lazy on-demand caching already covers with no code changes needed there.
+- **What moved vs. stayed:** skill levels, token balance, the "?" help note,
+  and the "train this skill" / AFK-time-purchase controls all stayed
+  inline in the widget panel exactly as before — only the hat/color
+  pickers moved. The panel's `renderPanel()` customize section shrank to a
+  single link; the actual picker markup (hat buttons, free swatches,
+  tier-grouped premium/legendary swatches) was extracted into a shared
+  `buildCustomizeMarkup(pet)` used only by the new page now.
+- **Reused, not duplicated:** `pet-customize.html` loads `mascot.js` like
+  every other page and calls straight into its existing
+  `setEquippedHat`/`setSkinColor`/`purchaseSkinColor` and `mascotRef()`/
+  `achievementsRef()` Firestore helpers — no parallel data-access path, so
+  equipping/purchasing from the new page writes to `household/mascot-state`
+  exactly the same way the old inline panel did.
+
+## Large static preview + circular back button on the customize page (shipped)
+
+Two follow-ups to `pet-customize.html`, both in service of making it feel
+like a real page rather than a bare picker bolted onto a link.
+
+- **Back button restyled to match every other page's home button** — was a
+  plain text "‹ Back" link, now the same circular icon-button treatment
+  (`.home-btn`'s exact dimensions/shadow/active-scale) with a back-arrow
+  SVG glyph instead of the house icon, so the page doesn't look visually
+  orphaned from the rest of the site.
+- **Large (180×180px) static pet preview**, rendered below the picker in
+  the page's normal document flow (not a fixed overlay — it scrolls with
+  everything else), with a themed, similarly-scaled-up ground strip behind
+  it. Both reuse existing mascot.js machinery rather than anything new:
+  - The preview calls `renderSprite()` — the exact same function
+    `initMascotWidget`'s roaming pets use — passed a bigger container.
+    `renderSprite` was already scale-agnostic (every child element is
+    percentage-sized to whatever box it's given), so no changes were
+    needed there for sizing.
+  - What *did* need a change: `renderSprite` gained a `showProp` parameter
+    (default `true`, so the roaming widget's own call site is unaffected)
+    that fully suppresses the tool/prop overlay when `false`, since a
+    frozen preview mid-tool-swing reads as a rendering bug, not the
+    deliberate working flourish it is on the live, animated widget. The
+    2-frame idle body-breathing swap is kept (own 650ms tick, same cadence
+    as the roaming widget's) — the one animation this preview allows.
+  - The ground strip reuses the same two-layer light/dark tile technique
+    (`ground-tile-light-mode.png`/`ground-tile-dark-mode.png`, both mounted
+    and opacity-toggled rather than swapping `background-image`, to avoid
+    the exact decode-stall the two-layer approach exists to prevent) and
+    wraps `window.onThemeChange` the same non-clobbering way
+    `initMascotWidget`'s own ground-texture hook does.
+  - `initPetCustomizer(opts)`'s signature grew from a single `containerId`
+    string to `{ pickerContainerId, previewSpriteId, previewGroundId }` —
+    the preview args are optional, so the function still works picker-only
+    if a future caller only wants that.
+- **Note for later, same as above:** tool skins, if they ever ship, are
+  exactly the feature this static preview exists to show off — swap
+  `showProp: false` for "render whatever tool skin is equipped, statically"
+  rather than continuing to hide the prop outright.
