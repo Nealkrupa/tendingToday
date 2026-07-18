@@ -171,6 +171,37 @@
     margin: -4px 0 10px;
   }
   code { font-family: 'IBM Plex Mono', monospace; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+  /* Same large static preview pet-customize.html uses, via the same
+     initPetCustomizer() — the wrap/sprite ids are ours to name (passed in
+     via previewSpriteId/previewGroundId below), but the ground-layer DOM
+     that function injects hardcodes the class name/ids from its own
+     template verbatim (.pet-preview-ground-layer, #pet-preview-ground-light/
+     -dark — see mascot.js's initPetCustomizer), so that one selector below
+     is NOT ours to rename even though it lives in this dt- prefixed block. */
+  #dt-preview-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+    height: 220px;
+    overflow: visible;
+  }
+  .pet-preview-ground-layer {
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    background-repeat: repeat-x;
+    background-position: bottom left;
+    background-size: auto 100%;
+    opacity: 0;
+  }
+  #dt-preview-sprite {
+    position: absolute;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+    width: 180px;
+    height: 180px;
+  }
 </style>
 </head>
 <body>
@@ -248,6 +279,22 @@
   <div class="hint">Bumps that specific <code>achievements-state</code> key by 1 — this is what actually
     exercises <code>tierXpForKey()</code>'s tier lookup, since the currently signed-in user's own pet's
     grant transaction fires live off whichever key changed, not just the total.</div>
+</div>
+
+<div class="panel">
+  <h2>Large preview</h2>
+  <div id="dt-preview-wrap">
+    <div id="dt-preview-ground"></div>
+    <div id="dt-preview-sprite"></div>
+  </div>
+  <div class="hint">Same large static preview <code>pet-customize.html</code> shows, via the same
+    <code>initPetCustomizer()</code> — shows whichever pet matches the "Signed in as" account above.
+    Switch that dropdown and click "Reload page" to preview the other pet (same reasoning as the
+    dropdown's own hint elsewhere on this page: a real reload is the faithful way to re-init this).</div>
+  <!-- initPetCustomizer() requires a pickerContainerId to do anything at
+       all — hidden here since the cosmetics grids in the Pets panel below
+       already cover equip actions; this section only wants its preview. -->
+  <div id="dt-preview-picker-unused" style="display:none;"></div>
 </div>
 
 <div class="panel" id="pets-panel">
@@ -819,6 +866,11 @@
   });
 
   window.initMascotWidget();
+  window.initPetCustomizer({
+    pickerContainerId: 'dt-preview-picker-unused',
+    previewSpriteId: 'dt-preview-sprite',
+    previewGroundId: 'dt-preview-ground'
+  });
 })();
 </script>
 
