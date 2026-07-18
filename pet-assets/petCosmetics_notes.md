@@ -2,16 +2,25 @@
 
 Scratch doc for cosmetic systems layered on top of the shipped mascot
 (life stage, skills/tokens, hats, skin-color tiers — all documented in
-[petDesign_notes.md](petDesign_notes.md)). Nothing here is built yet;
-this is where new unlock ideas get roughed out before they turn into
-real spec/implementation, same "resolved vs. still open" split that
-doc already uses.
+[petDesign_notes.md](petDesign_notes.md)). This is where new unlock
+ideas get roughed out before they turn into real spec/implementation,
+same "resolved vs. still open" split that doc already uses. One of the
+three proposals below (the body base/trim split) has since actually
+shipped — its real implementation record now lives in
+petDesign_notes.md's "Body art split into base + trim layers (shipped)"
+section, not here; this doc keeps only a short pointer to it. Buyable
+bodies and buyable hats are still unbuilt.
 
 ## Currently shipped, for reference
 
-- **Bodies**: 4 life-stage sprites × 2 idle frames, grayscale, tinted
-  live via canvas multiply (`getTintedImage`) using the pet's chosen
-  skin color. One fixed art set — no alternate body designs exist yet.
+- **Bodies**: 4 life-stage sprites × 2 idle frames, now **base + trim
+  two-layer PNGs per frame** (`pet-body-{stage}-{frame}-{layer}.png`),
+  same construction as hats — base is fixed-color and never recolored,
+  trim is grayscale and tinted live via canvas multiply (`getTintedImage`)
+  using the pet's chosen skin color. Shipped for real across all 4
+  stages (Champion currently renders with an empty placeholder trim
+  pending real two-layer art — see petDesign_notes.md). One fixed art
+  set — no alternate body designs (eggs) exist yet.
 - **Hats**: base + trim two-layer PNGs per hat (base = fixed skill
   identity color, trim = tier-tinted). Unlocked for free at skill
   levels 25/50/75/90/99, plus the completionist hat. Nothing is
@@ -62,20 +71,17 @@ level-gated achievement items ("what has this pet accomplished"),
 buyable hats are a separate, parallel unlock track ("what did you
 spend tokens on").
 
-## Split body art into base + trim layers (like hats)
+## Split body art into base + trim layers (like hats) — shipped
 
-Currently the body is a single grayscale layer, tinted as one flat
-color via `getTintedImage`. Proposal: split each body frame into two
-grayscale layers — **base** (main body mass) and **trim** (a smaller
-accent region — belly patch, ear tips, whatever reads as a distinct
-"trim" zone per stage) — so skin customization can tint the two
-regions independently, the same base/trim split hats already use.
-Rendering-wise this is close to free: `renderSprite` already draws hat
-base + hat trim as two stacked, independently-tinted `<img>`s per pet;
-the body would gain the exact same two-`<img>`-stack pattern instead
-of the current single tinted `<img>`. No new tinting technique needed
-— `getTintedImage` already handles arbitrary (image, color) pairs and
-is cached per combo.
+**No longer a proposal — this shipped.** The body now uses the same
+base + trim two-layer construction hats already used: base is fixed-
+color and never recolored, trim is grayscale and takes the pet's skin
+color, mirroring exactly the `renderSprite` base + trim stacking hats
+already had. See petDesign_notes.md's **"Body art split into base +
+trim layers (shipped)"** section for the actual implementation record
+(art findings, migration of Champion's placeholder trim, the `mascot.js`
+changes, `ASSET_VERSION` bump, and devtools verification) — kept there
+rather than duplicated here, per this doc's own intro note.
 
 ## Locked in
 
@@ -91,7 +97,8 @@ is cached per combo.
   with price as the only differentiator.
 - **Buyable-body palette: follows the base/trim split**, same as the
   default body — grayscale base + trim layers, tinted live the same way
-  the default body will be post-split. No fixed-palette "special" eggs.
+  the default body already is (see the "shipped" pointer above). No
+  fixed-palette "special" eggs.
 - **Buyable-body anchor points: new eggs are drawn against the same
   per-stage head/hand anchors as the default body**, not their own
   bespoke placement — see the anchor-point templates below.
@@ -120,23 +127,6 @@ is cached per combo.
 - **Buyable-hat storage shape:** `pets.<user>.purchasedHats: [...]`
   alongside the existing `purchasedSkinColors`; `equippedHat` widened
   to reference either pool.
-- **Body base/trim split doubles the asset count (8 → 16 frames)**,
-  same "additive, not multiplicative" framing as the original hat
-  base/trim decision — still just 2 layers per frame, not a per-stage
-  multiplier.
-- **Body split: trim is the only recolorable region.** The base layer
-  is a fixed, consistent look across every pet (not user-tintable);
-  only the trim layer takes the pet's chosen skin color. No second,
-  independent trim color picker — one skin-color choice still drives
-  the whole pet, it just now only paints the trim layer instead of the
-  entire body. This also means the premium-flair-interaction question
-  (which region carries Uncommon/Rare/Legendary flair) doesn't come up
-  — trim is the only tinted region, so flair unambiguously applies
-  there, the same way it already keys off a hat's trim today.
-- **Body split migration: existing single-layer bodies get trivially
-  reissued as a base-only asset** with an empty/transparent trim layer,
-  until real two-layer art replaces them — not kept on a separate
-  legacy single-layer render path.
 - **Stored art assets stay a fixed 64×64 canvas, always** — no
   re-exporting any asset (existing or future) at a cropped size, since
   every offset in `mascot.js` is a percentage of that hardcoded 64px
@@ -152,8 +142,8 @@ is cached per combo.
 One 64×64 transparent reference image **per life stage** — split this
 way (rather than one combined image) so each can be dropped directly
 behind that specific stage's frame in an art tool as its own overlay
-layer, matching the `pet-body-{stage}-{frame}.png` per-stage file
-split the actual body art already uses:
+layer, matching the `pet-body-{stage}-{frame}-{layer}.png` per-stage
+file split the actual body art already uses:
 
 - [`template-fresh.png`](template-fresh.png)
 - [`template-in-training.png`](template-in-training.png)
@@ -236,9 +226,9 @@ Extends the existing kebab-case, category-prefix-first convention from
 `petDesign_notes.md`'s own "Asset file naming" section — same
 `pet-assets/` folder, same prefix-groups-files-together logic.
 
-### Bodies — existing convention gains a `-{layer}` suffix
+### Bodies — existing convention gained a `-{layer}` suffix — shipped
 
-Once the base/trim split ships, every body frame becomes two files
+Now that the base/trim split has shipped, every body frame is two files
 instead of one:
 
 **`pet-body-{stage}-{frame}-{layer}.png`**, `layer` = `base` | `trim`
@@ -246,10 +236,10 @@ instead of one:
 e.g. `pet-body-fresh-1-base.png`, `pet-body-fresh-1-trim.png`,
 `pet-body-fresh-2-base.png`, `pet-body-fresh-2-trim.png`, and the same
 four-file pattern for `in-training`, `rookie`, `champion` — 16 files
-total, replacing the current 8 single-layer ones. Per the migration
-decision above, existing files get reissued as `-base` (not renamed to
-something new) with an empty/transparent `-trim` sibling added
-alongside each — so this is additive, not an in-place rename.
+total, replacing the previous 8 single-layer ones (deleted via `git rm`
+once every stage had a `-base`/`-trim` pair). See petDesign_notes.md's
+"Body art split into base + trim layers (shipped)" for the actual
+migration record, including Champion's placeholder-trim interim state.
 
 ### Buyable bodies (eggs)
 
@@ -306,8 +296,9 @@ cosmetic asset themselves.
 
 ## Open questions
 
-None currently for the three proposals above — every question raised
-while roughing them out has a resolved answer in "Locked in." Next
-step for each is execution-level: picking real egg/hat art direction
-and prices, and actually implementing the base/trim body split in
-`mascot.js`.
+None currently. The body base/trim split has shipped (see
+petDesign_notes.md). For the two still-unbuilt proposals — buyable
+bodies and buyable hats — every question raised while roughing them out
+already has a resolved answer in "Locked in." Next step for each is
+execution-level: picking real egg/hat art direction and prices, then
+implementing the purchase/equip flow in `mascot.js`.

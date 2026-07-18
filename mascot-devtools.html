@@ -105,6 +105,56 @@
   }
   button:hover { border-color: var(--ink); }
   button.danger { border-color: #B4636F; color: #B4636F; }
+  button.unlock-all { border-color: var(--gold); color: var(--gold); }
+  .dt-cosmetics-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--muted);
+    margin: 10px 0 4px;
+  }
+  .dt-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .dt-hat-btn, .dt-swatch-btn {
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 5px 9px;
+    border-radius: 7px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    cursor: pointer;
+    opacity: 0.55;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .dt-hat-btn:hover, .dt-swatch-btn:hover { border-color: var(--ink); }
+  .dt-hat-btn.unlocked, .dt-swatch-btn.unlocked { opacity: 1; }
+  .dt-hat-btn.equipped, .dt-swatch-btn.equipped {
+    border-color: var(--sage);
+    background: var(--sage);
+    color: #fff;
+    opacity: 1;
+  }
+  .dt-swatch-btn {
+    padding: 5px 8px 5px 5px;
+  }
+  .dt-swatch-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: inline-block;
+    border: 1px solid rgba(0,0,0,0.15);
+    flex-shrink: 0;
+  }
+  .dt-swatch-dot.rainbow {
+    background: conic-gradient(red, orange, yellow, green, blue, violet, red);
+  }
   .pet-block {
     border-top: 1px dashed var(--line);
     padding-top: 10px;
@@ -168,10 +218,14 @@
   <div class="row">
     <button id="reload-btn">🔄 Reload page (real fresh-load test)</button>
     <button id="reset-btn" class="danger">🗑 Reset all mock data</button>
+    <button id="unlock-all-btn" class="unlock-all">🔓 Unlock all cosmetics (both pets)</button>
   </div>
   <div class="hint">"Reload page" does a real <code>location.reload()</code> — the most faithful way to
     test the actual visit-grant transaction, since it re-runs mascot.js from scratch exactly like a
-    real page navigation would.</div>
+    real page navigation would. "Unlock all cosmetics" maxes every skill (all hats + the completionist
+    hat unlock), marks every premium skin color as purchased, and pads each pet's tokens — for both
+    pets at once — so every cosmetic in the grids below is immediately clickable without grinding XP
+    or tokens first.</div>
 </div>
 
 <div class="panel">
@@ -359,7 +413,7 @@
 </script>
 
 <script src="achievements.js?v=5"></script>
-<script src="mascot.js?v=48"></script>
+<script src="mascot.js?v=49"></script>
 
 <script>
 (function () {
@@ -368,6 +422,65 @@
   const SKILLS = ['woodcutting', 'gardening', 'fishing'];
   const PET_KEYS = ['userA', 'userB'];
   const PET_NAMES = { userA: 'Neal', userB: 'Nat' };
+
+  // --- Cosmetic catalog + level-curve constants, mirrored from mascot.js ---
+  // mascot.js keeps these private inside its own module IIFE (nothing but
+  // initMascotWidget/initPetCustomizer is exposed on window), so the
+  // cosmetics grid below needs its own copy to know what's unlockable and
+  // at what level — same "duplicate + comment to keep in sync" approach
+  // this file already uses for TEST_LABELS mirroring auth.js's
+  // EMAIL_LABELS. If mascot.js's SKILL_EMOJI, HAT_TIER_LEVELS,
+  // SWATCH_COLORS, PREMIUM_SWATCHES, or the XP curve (rsRawXP/XP_SCALE)
+  // ever change, update the matching copy here too.
+  const SKILL_EMOJI = { woodcutting: '🪓', gardening: '🪴', fishing: '🐟' };
+  const HAT_TIER_LEVELS = [25, 50, 75, 90];
+  const SWATCH_COLORS = ['#7C9075', '#5B7B9A', '#B4636F', '#C08A2E'];
+  const RAINBOW_SKIN = 'rainbow';
+  const PREMIUM_SWATCHES = [
+    { color: '#C97064', price: 5, tierLabel: 'Common' },
+    { color: '#5C6E78', price: 5, tierLabel: 'Common' },
+    { color: '#8B6FA8', price: 20, tierLabel: 'Uncommon' },
+    { color: '#3F7F73', price: 20, tierLabel: 'Uncommon' },
+    { color: '#9B59B6', price: 40, tierLabel: 'Rare' },
+    { color: '#2ECC71', price: 40, tierLabel: 'Rare' },
+    { color: RAINBOW_SKIN, price: 80, tierLabel: 'Legendary' }
+  ];
+  function rsRawXP(level, divisor) {
+    let total = 0;
+    for (let n = 1; n < level; n++) total += Math.floor(n + 300 * Math.pow(2, n / divisor));
+    return Math.floor(total / 4);
+  }
+  const RAW_99 = rsRawXP(99, 10);
+  const XP_SCALE = 1000000 / RAW_99;
+  const LEVEL_XP = [0];
+  for (let L = 1; L <= 99; L++) LEVEL_XP[L] = rsRawXP(L, 10) * XP_SCALE;
+  function levelForXP(xp) {
+    let lvl = 1;
+    for (let L = 1; L <= 99; L++) { if (xp >= LEVEL_XP[L]) lvl = L; else break; }
+    return lvl;
+  }
+  const MAX_LEVEL_XP = LEVEL_XP[99]; // exactly 1,000,000 by construction (XP_SCALE's whole point)
+
+  // Every hat id the real game can ever produce, with its unlock check —
+  // mirrors unlockedHatsForPet()'s id shapes ({skill}-{tier}, {skill}-max,
+  // completionist) exactly, since resolveHat() in mascot.js parses those
+  // same id patterns.
+  function hatCatalog() {
+    const out = [];
+    SKILLS.forEach(function (skill) {
+      HAT_TIER_LEVELS.forEach(function (tier) {
+        out.push({ id: skill + '-' + tier, label: SKILL_EMOJI[skill] + ' ' + tier, unlockLevel: tier, skill: skill });
+      });
+      out.push({ id: skill + '-max', label: SKILL_EMOJI[skill] + ' Max', unlockLevel: 99, skill: skill });
+    });
+    out.push({ id: 'completionist', label: '🏆 Completionist', unlockLevel: 99, skill: null });
+    return out;
+  }
+  function isHatUnlocked(pet, hat) {
+    const skillXP = pet.skillXP || {};
+    if (hat.id === 'completionist') return SKILLS.every(function (s) { return levelForXP(skillXP[s] || 0) >= 99; });
+    return levelForXP(skillXP[hat.skill] || 0) >= hat.unlockLevel;
+  }
 
   function getAch() { return window.__mockDB.get(ACH_DOC[0], ACH_DOC[1]) || { counts: {} }; }
   function setAch(data) { window.__mockDB.set(ACH_DOC[0], ACH_DOC[1], data); }
@@ -403,6 +516,7 @@
       location.reload();
     }
   });
+  document.getElementById('unlock-all-btn').addEventListener('click', unlockAllCosmetics);
 
   // --- Household totals ---
   // setAch() does a full overwrite of household/achievements-state (no
@@ -488,6 +602,37 @@
         '<div class="row"><label>Purchased skin colors</label><input type="text" data-field="purchasedSkinColors" data-pet="' + petKey + '" value="' + (pet.purchasedSkinColors || []).join(', ') + '" placeholder="comma-separated hex, e.g. #5C6E78, #3F7F73"></div>' +
         '<div class="row"><label>Skin color</label><input type="text" data-field="skinColor" data-pet="' + petKey + '" value="' + (pet.skinColor || '#5B7B9A') + '" placeholder="hex, or \'rainbow\' for the cycling skin"></div>' +
         '<div class="row"><button data-apply-pet="' + petKey + '">Apply this pet’s fields</button></div>' +
+        '<div class="dt-cosmetics-label">All hats — tap to force-equip (dim = not actually unlocked yet; forcing equips it anyway)</div>' +
+        '<div class="dt-grid">' +
+          '<button class="dt-hat-btn unlocked' + (!pet.equippedHat ? ' equipped' : '') + '" data-force-hat="' + petKey + '" data-hat-id="">None</button>' +
+          hatCatalog().map(function (h) {
+            const unlocked = isHatUnlocked(pet, h);
+            const equipped = pet.equippedHat === h.id;
+            return '<button class="dt-hat-btn' + (unlocked ? ' unlocked' : '') + (equipped ? ' equipped' : '') +
+              '" data-force-hat="' + petKey + '" data-hat-id="' + h.id + '" title="' +
+              (unlocked ? 'unlocked' : 'locked — forcing equips it anyway') + '">' + h.label + '</button>';
+          }).join('') +
+        '</div>' +
+        '<div class="dt-cosmetics-label">All skin colors — tap to force-equip (dim = not purchased yet; forcing equips it anyway)</div>' +
+        '<div class="dt-grid">' +
+          SWATCH_COLORS.map(function (c) {
+            const equipped = pet.skinColor === c;
+            return '<button class="dt-swatch-btn unlocked' + (equipped ? ' equipped' : '') +
+              '" data-force-color="' + petKey + '" data-color-value="' + c + '" title="free">' +
+              '<span class="dt-swatch-dot" style="background:' + c + ';"></span>free</button>';
+          }).join('') +
+          PREMIUM_SWATCHES.map(function (s) {
+            const owned = (pet.purchasedSkinColors || []).indexOf(s.color) !== -1;
+            const equipped = pet.skinColor === s.color;
+            const isRainbow = s.color === RAINBOW_SKIN;
+            const dotStyle = isRainbow ? '' : ' style="background:' + s.color + ';"';
+            return '<button class="dt-swatch-btn' + (owned ? ' unlocked' : '') + (equipped ? ' equipped' : '') +
+              '" data-force-color="' + petKey + '" data-color-value="' + s.color + '" title="' + s.tierLabel + ', ' +
+              s.price + ' tokens' + (owned ? ' (owned)' : ' (not purchased — forcing equips it anyway)') + '">' +
+              '<span class="dt-swatch-dot' + (isRainbow ? ' rainbow' : '') + '"' + dotStyle + '></span>' +
+              s.tierLabel + ' ' + s.price + '🪙️</button>';
+          }).join('') +
+        '</div>' +
         '<div class="row"><label>AFK block</label>' + (blockActive
           ? '<span>' + pet.activeAfkBlock.hours + 'h block, ' + Math.round(pet.activeAfkBlock.xpGrantedSoFar || 0) + ' XP granted so far</span> <button data-clear-block="' + petKey + '" class="danger">Clear block</button>'
           : '<span>none active</span> <button data-start-block="' + petKey + '" data-hours="1">Start 1h (test)</button> <button data-start-block="' + petKey + '" data-hours="10">Start 10h (test)</button>') +
@@ -524,6 +669,59 @@
         clearAfkBlock(petKey);
       });
     });
+    wrap.querySelectorAll('[data-force-hat]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const petKey = btn.getAttribute('data-force-hat');
+        const hatId = btn.getAttribute('data-hat-id');
+        forceSetPetField(petKey, 'equippedHat', hatId || null);
+      });
+    });
+    wrap.querySelectorAll('[data-force-color]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const petKey = btn.getAttribute('data-force-color');
+        forceSetPetField(petKey, 'skinColor', btn.getAttribute('data-color-value'));
+      });
+    });
+  }
+
+  // Directly sets one field on one pet and re-renders — used by the
+  // cosmetics grids' "tap to force-equip" buttons, which intentionally
+  // bypass the real unlock/purchase checks (this is a devtools shortcut for
+  // previewing any hat/color instantly, not a simulation of the real
+  // equip flow — that's what the text-field "Apply this pet's fields"
+  // button above already exercises for `equippedHat`/`skinColor`).
+  function forceSetPetField(petKey, field, value) {
+    const mascotData = getMascot();
+    const pets = Object.assign({}, mascotData.pets || {});
+    const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
+    pet[field] = value;
+    pets[petKey] = pet;
+    setMascot(Object.assign({}, mascotData, { pets: pets }));
+    renderPetControls();
+    renderRawMascot();
+  }
+
+  // Maxes every skill (unlocking every hat, including completionist),
+  // marks every premium skin color as owned, and pads tokens generously —
+  // for both pets at once, so the cosmetics grids above have nothing left
+  // locked and any future purchase-flow testing (buyable bodies/hats) has
+  // plenty of currency too. MAX_LEVEL_XP is exactly 1,000,000 by
+  // construction (see XP_SCALE above), same as mascot.js's own level-99
+  // threshold.
+  function unlockAllCosmetics() {
+    const mascotData = getMascot();
+    const pets = Object.assign({}, mascotData.pets || {});
+    PET_KEYS.forEach(function (petKey) {
+      const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
+      pet.skillXP = {};
+      SKILLS.forEach(function (s) { pet.skillXP[s] = MAX_LEVEL_XP; });
+      pet.purchasedSkinColors = PREMIUM_SWATCHES.map(function (s) { return s.color; });
+      pet.tokensBaseline = -1000000; // tokens = liveTotal - tokensBaseline - tokensSpent
+      pets[petKey] = pet;
+    });
+    setMascot(Object.assign({}, mascotData, { pets: pets }));
+    renderPetControls();
+    renderRawMascot();
   }
 
   function applyPetFields(petKey) {

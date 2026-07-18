@@ -461,6 +461,14 @@ LCD-toy-crude.
 
 ### Tintable body (user-selectable skin color)
 
+> **Superseded.** This section describes the *original* single-layer body
+> (the whole sprite drawn grayscale and tinted as one piece). As of "Body
+> art split into base + trim layers" near the end of this doc, the body is
+> two layers like a hat — only the trim layer is grayscale/tintable; base is
+> fixed-color and never recolored. The *technique* below (`getTintedImage`,
+> canvas multiply-recolor) is unchanged and still accurate — it just now
+> applies to the trim asset instead of the whole body.
+
 Body art (the 4 life-stage sprites, 8 frames with idle animation) is drawn
 in **grayscale**, not flat color, so users can pick their own skin color per
 pet. Hats and active-skill props stay fixed-palette — they represent an
@@ -1415,3 +1423,76 @@ to never flash at all (everything was pre-warmed).
   anything else from `pet-assets/petCosmetics_notes.md`'s open ideas —
   gets this same once-ever-per-browser persistence for free, provided it's
   rendered through `getTintedImage()` rather than a new ad hoc path.
+
+## Body art split into base + trim layers (shipped)
+
+First of the three proposals from `pet-assets/petCosmetics_notes.md` to
+actually ship. The body now uses the same two-layer construction hats have
+always used — **base** (fixed-color, never recolored) underneath, **trim**
+(grayscale, tinted to the pet's chosen skin color) on top — instead of one
+single grayscale layer tinted as a whole.
+
+- **Real art, not a placeholder split, for 3 of 4 stages.** Fresh,
+  In-Training, and Rookie shipped with genuinely hand-drawn two-layer art:
+  base is opaque and already colored (e.g. a warm tan, not neutral gray)
+  and includes the eyes; trim is mostly transparent and only paints a thin
+  recolorable rim/edge-highlight plus a small mouth accent — with a
+  transparent hole exactly where base's eyes are, so they show through
+  untinted regardless of skin color. Verified pixel-for-pixel: all 28 of
+  Fresh frame 1's opaque eye pixels in `pet-body-fresh-1-base.png` are
+  fully transparent at the same coordinates in `pet-body-fresh-1-trim.png`.
+  This is the same "trim = band/edge accent, transparent elsewhere"
+  construction the Art Spec section above already established for hats,
+  just applied to the body for the first time.
+- **Champion had no split art yet at ship time.** Per the migration
+  decision already locked in `petCosmetics_notes.md`, its old single-layer
+  `pet-body-champion-1.png`/`-2.png` were reissued as `-base.png` (a
+  straight copy, so Champion looks identical to before) with a brand-new,
+  fully transparent `-trim.png` sibling — not kept on a separate legacy
+  single-layer render path. Net effect until real Champion trim art
+  exists: Champion pets render with no skin-color tint at all (there's
+  nothing in an empty trim layer for `getTintedImage` to color), which is
+  the expected interim state, not a bug.
+- **The 8 old single-layer files were deleted, not left behind.** Once
+  every stage had a `-base`/`-trim` pair, `pet-body-{stage}-{frame}.png`
+  (all 8, tracked in git) were removed via `git rm` rather than `rm`,
+  since they were already committed — a plain filesystem delete would
+  have looked like an accidental loss in `git status` instead of an
+  intentional, reviewable removal.
+- **Naming: `pet-body-{stage}-{frame}-{layer}.png`, `layer` = `base` |
+  `trim`** — 16 files total (4 stages × 2 frames × 2 layers), replacing
+  the previous 8. Matches the convention already proposed for buyable
+  "egg" bodies in `petCosmetics_notes.md` (`pet-body-{eggId}-{stage}-
+  {frame}-{layer}.png`), just without an `eggId` segment for the default
+  body ("egg #0").
+- **`renderSprite` restructured to mirror the hat block exactly**
+  (`mascot.js`): a raw, untinted base `<img>` renders first, then the trim
+  — either `getTintedImage(trimSrc, skinColor)` for a normal color or
+  `buildCyclingLayers(trimSrc, CYCLE_COLORS)` for the rainbow skin — stacks
+  on top, same base-then-trim order and same functions the hat rendering
+  path already used. The Uncommon-tier pulse class and the Rare/Legendary
+  shimmer's mask-image now key off the trim source specifically, not the
+  whole body — flair only ever paints the region that's actually tinted,
+  same reasoning as a hat's own trim carrying its tier flair while its
+  base never does.
+- **`precomputeBodyTints` now warms the cache against the trim asset only**
+  — base is never passed to `getTintedImage`, so precomputing tints
+  against it would have warmed combinations that can never render.
+- **Asset preload manifest and cache-busting updated to match:**
+  `ALL_ASSET_FILES` now generates 16 body filenames per the new
+  `-{layer}` suffix instead of 8; `ASSET_VERSION` bumped `v=4` → `v=5`; the
+  `mascot.js?v=48` script tag bumped to `v=49` on every page that loads it
+  (`home.html`, `tending-today.html`, `grocery-list.html`, `notes.html`,
+  `meal-planning.html`, `wishlist.html`, `house-projects.html`,
+  `contacts.html`, `achievements.html`, `subscriptions.html`,
+  `pet-customize.html`, and `mascot-devtools.html`).
+- **Verified in the offline devtools harness:** with the rainbow skin and
+  the completionist hat both equipped, inspected the sprite's DOM directly
+  and found exactly 26 `<img>` elements — 1 static body base + 12
+  rainbow-cycling body-trim layers + 1 static hat base + 12 cycling
+  hat-trim layers — plus 2 shimmer divs (one per cycling trim), confirming
+  the body's cycling now runs on its own trim layer independently of the
+  hat's, both over a static base. Separately set the household's lifetime
+  completions high enough to reach Champion and confirmed it renders as a
+  plain, untinted body with no console errors, using its placeholder empty
+  trim as expected.

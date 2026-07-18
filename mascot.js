@@ -165,7 +165,7 @@
   // the shared .js files) whenever a pet-assets PNG is replaced in place —
   // browsers otherwise keep serving the old cached bytes indefinitely, since
   // the filename itself never changes.
-  const ASSET_VERSION = 'v=4';
+  const ASSET_VERSION = 'v=5';
   const ASSET_BASE = 'pet-assets/';
   function assetUrl(file) { return ASSET_BASE + file + '?' + ASSET_VERSION; }
 
@@ -178,7 +178,7 @@
   // priority-alert.js's cached-state paint) means every render from then on
   // hits an already-decoded image, so the swap is instant.
   const ALL_ASSET_FILES = []
-    .concat(STAGES.flatMap((s) => [1, 2].map((f) => 'pet-body-' + s.key + '-' + f + '.png')))
+    .concat(STAGES.flatMap((s) => [1, 2].flatMap((f) => ['base', 'trim'].map((layer) => 'pet-body-' + s.key + '-' + f + '-' + layer + '.png'))))
     .concat(SKILLS.flatMap((skill) => ['base', 'trim', 'max-base', 'max-trim'].map((suffix) => 'hat-' + skill + '-' + suffix + '.png')))
     .concat(['hat-completionist-base.png', 'hat-completionist-trim.png'])
     .concat(SKILLS.map((skill) => 'prop-' + skill + '.png'))
@@ -1313,7 +1313,10 @@
     const tasks = [];
     STAGES.forEach((stage) => {
       [1, 2].forEach((frame) => {
-        const src = assetUrl('pet-body-' + stage.key + '-' + frame + '.png');
+        // Only the trim layer is ever tinted (base is a fixed, non-tintable
+        // color per pet-cosmetic-body-split) — warming the cache against the
+        // whole body here would precompute combinations that never render.
+        const src = assetUrl('pet-body-' + stage.key + '-' + frame + '-trim.png');
         SWATCH_COLORS.forEach((color) => tasks.push(() => getTintedImage(src, color)));
         // Also warms every premium color (previously only free SWATCH_COLORS
         // were precomputed, so a freshly-purchased premium color would flash
@@ -1565,7 +1568,8 @@
     if (showProp === undefined) showProp = true;
     const stage = pet.__stage;
     const skinColor = pet.skinColor || '#5B7B9A';
-    const bodySrc = assetUrl('pet-body-' + stage.key + '-' + frame + '.png');
+    const bodyBaseSrc = assetUrl('pet-body-' + stage.key + '-' + frame + '-base.png');
+    const bodyTrimSrc = assetUrl('pet-body-' + stage.key + '-' + frame + '-trim.png');
 
     const bobPct = frame === 2 ? (stage.headBob / 64 * 100) : 0;
 
@@ -1638,29 +1642,38 @@
 
     const skinFlair = skinFlairFor(skinColor);
     // Uncommon-tier ("pulse") colors get the same brightness-pulse the
-    // picker swatch uses, applied directly to the body image — previously
-    // this flair only showed up in the picker preview, never on the
-    // actually-equipped pet.
+    // picker swatch uses. Per the body base/trim split, skin color only
+    // ever paints the trim layer (a thin edge/accent, transparent over the
+    // eyes so they show through from base underneath) — base is a fixed,
+    // non-tintable color and never gets this class, same as a hat's base
+    // never gets its trim's tier tint.
     const bodyPulseClass = skinFlair === 'pulse' ? ' mascot-body-pulse' : '';
     const bodyPulseDelay = skinFlair === 'pulse' ? `animation-delay:${phaseDelay(2200)};` : '';
-    const bodyHtml = skinColor === RAINBOW_SKIN
-      ? buildCyclingLayers(bodySrc, CYCLE_COLORS)
-      : `<img class="${bodyPulseClass}" src="${getTintedImage(bodySrc, skinColor) || bodySrc}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;${bodyPulseDelay}" />`;
+    const bodyTrimHtml = skinColor === RAINBOW_SKIN
+      ? buildCyclingLayers(bodyTrimSrc, CYCLE_COLORS)
+      : `<img class="${bodyPulseClass}" src="${getTintedImage(bodyTrimSrc, skinColor) || bodyTrimSrc}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;${bodyPulseDelay}" />`;
     // Rare-tier ("shimmer") and rainbow skin colors get the same
-    // shimmer-bar highlight the completionist/max hats already use —
-    // previously this flair only showed up on the picker's swatch preview,
-    // never on the actually-equipped body, since the two used entirely
-    // separate rendering paths. Masked to bodySrc's own alpha channel, same
-    // mask-image + overflow:hidden clipping the hat version uses.
+    // shimmer-bar highlight the completionist/max hats already use, masked
+    // to the trim layer's own alpha channel — the trim is the only region a
+    // skin color ever paints, so the shimmer should only sweep across that
+    // silhouette, not the whole body (which includes the fixed, untinted
+    // base underneath).
     const bodyShimmerHtml = (skinFlair === 'shimmer' || skinFlair === 'rainbow')
-      ? `<div class="mascot-tint-rect" style="-webkit-mask-image:url('${bodySrc}');mask-image:url('${bodySrc}');overflow:hidden;">
+      ? `<div class="mascot-tint-rect" style="-webkit-mask-image:url('${bodyTrimSrc}');mask-image:url('${bodyTrimSrc}');overflow:hidden;">
           <div class="mascot-shimmer-bar" style="background:rgba(255,255,255,0.85);animation-delay:${phaseDelay(2600)};"></div>
         </div>`
       : '';
+    // Base renders raw (no tint, no flair) underneath; trim (tinted/cycling,
+    // plus its own shimmer) stacks on top — same base-then-trim order as a
+    // hat's own base + trim layers.
+    const bodyHtml = `
+      <img src="${bodyBaseSrc}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;" />
+      ${bodyTrimHtml}
+      ${bodyShimmerHtml}
+    `;
     container.innerHTML = `
       ${propHtml}
       ${bodyHtml}
-      ${bodyShimmerHtml}
       ${hatHtml}
     `;
   }
