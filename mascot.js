@@ -147,26 +147,59 @@
   // completionist cycles through the same CYCLE_COLORS/CYCLE_TOTAL_MS the
   // rainbow skin and completionist hat already use, so their timing stays
   // in sync.
+  // Sizing note: `mascot-title-shine` scrolls background-position from 0%
+  // to -100%, which for a background-size of W container-widths shifts the
+  // visible window by exactly (W-1) container-widths — always one
+  // container-width short of the gradient's own full W-width span. A
+  // gradient sized to fit exactly *one* period (the old `stops.length *
+  // 100%` sizing) can therefore never loop seamlessly: the window at the
+  // end of the animation never quite lines back up with the window at the
+  // start, so it visibly skips when the animation restarts. Doubling the
+  // pattern into two back-to-back periods and fixing background-size at a
+  // flat 200% fixes this for any period length: the shift then always
+  // covers exactly one full period, so position -100% lines up pixel-for-
+  // pixel with position 0% of the *next* period, and the loop is seamless.
   function titleTextStyle(title) {
     if (title.tierKey === 'completionist') {
-      const stops = CYCLE_COLORS.concat([CYCLE_COLORS[0]]);
-      return `background-image:linear-gradient(90deg, ${stops.join(', ')});background-size:${stops.length * 100}% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:mascot-title-shine ${CYCLE_TOTAL_MS}ms linear infinite;animation-delay:${phaseDelay(CYCLE_TOTAL_MS)};`;
+      const onePeriod = CYCLE_COLORS.concat([CYCLE_COLORS[0]]);
+      const stops = onePeriod.concat(onePeriod.slice(1));
+      return `background-image:linear-gradient(90deg, ${stops.join(', ')});background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:mascot-title-shine ${CYCLE_TOTAL_MS}ms linear infinite;animation-delay:${phaseDelay(CYCLE_TOTAL_MS)};`;
     }
     if (title.tierKey === 'max') {
       const c = title.color;
-      const stops = [c, '#ffffff', c, '#ffffff', c];
-      return `background-image:linear-gradient(90deg, ${stops.join(', ')});background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:mascot-title-shine 2600ms linear infinite;animation-delay:${phaseDelay(2600)};`;
+      const onePeriod = [c, '#ffffff', c];
+      const stops = onePeriod.concat(onePeriod.slice(1));
+      return `background-image:linear-gradient(90deg, ${stops.join(', ')});background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:mascot-title-shine 2600ms linear infinite;animation-delay:${phaseDelay(2600)};`;
     }
     return `color:${title.color};`;
   }
 
+  // #rrggbb -> rgba(...) at a given alpha, for tinting a title's low-opacity
+  // backdrop to its own color (see titleHtml below) without a separate
+  // color-math library.
+  function hexToRgba(hex, alpha) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+    if (!m) return `rgba(120,120,120,${alpha})`;
+    const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
   // Badge + colored/shimmer title text + a trailing space, ready to prefix
   // onto a pet's display name — empty string if no title is equipped.
+  // Wrapped in a low-opacity pill tinted to the title's own color — the
+  // same "colored text on a matching pastel background" pattern notes.html's
+  // priority pills use (rose text on --rose-bg, etc.) — since a title's own
+  // color (especially the dull low tiers) can wash out against the sage
+  // equip-button background or the pet's ground artwork; a same-hue scrim
+  // behind the text restores contrast without changing the color itself.
+  // Completionist has no fixed `.color` (it cycles), so it falls back to a
+  // neutral gray scrim.
   function titleHtml(pet) {
     const title = resolveTitle(pet.equippedTitle);
     if (!title) return '';
     const badge = title.skill ? SKILL_EMOJI[title.skill] : '🏆';
-    return `<span class="mascot-title-badge">${badge}</span><span class="mascot-title-text" style="${titleTextStyle(title)}">${title.text}</span> `;
+    const pillBg = title.color ? hexToRgba(title.color, 0.22) : 'rgba(120,120,120,0.22)';
+    return `<span class="mascot-title-pill" style="background:${pillBg};"><span class="mascot-title-badge">${badge}</span><span class="mascot-title-text" style="${titleTextStyle(title)}">${title.text}</span></span> `;
   }
 
   // ---------------------------------------------------------------------
@@ -441,6 +474,24 @@
             pet.lastVisitAt = firebase.firestore.FieldValue.delete();
           }
         }
+
+        // Clears cosmetic ids that no longer correspond to anything
+        // unlockable — runs on every grant (not just isNewPet/isLegacyPet
+        // above), since a title-tier revamp (renamed/retired ids, changed
+        // thresholds) can strand an equippedTitle without ever touching
+        // hoursAlreadyGranted. resolveTitle()/resolveHat() render whatever
+        // id is stored with no validation of their own, so this is the one
+        // place that actually re-checks against the pet's current unlocks.
+        if (pet.equippedTitle) {
+          const unlockedTitleIds = unlockedHatsForPet(pet).map((h) => h.id);
+          if (unlockedTitleIds.indexOf(pet.equippedTitle) === -1) pet.equippedTitle = null;
+        }
+        // equippedHat is cleared unconditionally for now: the buyable-hat
+        // catalog it's reserved for (petCosmetics_notes.md) hasn't shipped,
+        // so nothing is currently a valid value — any stored value today is
+        // leftover data from before titles/hats split. Replace this with a
+        // real catalog check once buyable hats exist.
+        if (pet.equippedHat) pet.equippedHat = null;
 
         const activeSkill = SKILLS.includes(pet.activeSkill) ? pet.activeSkill : 'woodcutting';
         const skillXP = Object.assign({ woodcutting: 0, gardening: 0, fishing: 0 }, pet.skillXP || {});
@@ -853,6 +904,12 @@
       font-weight: 700;
       color: var(--muted, #6B7568);
       font-family: 'IBM Plex Mono', monospace;
+    }
+    .mascot-title-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 1px 6px 1px 4px;
     }
     .mascot-title-badge { margin-right: 2px; }
     .mascot-title-text { font-weight: 700; }
@@ -2253,6 +2310,12 @@
 
       function renderCustomizer() {
         if (!mascotDoc && !counts) return; // wait for first data from both subscriptions
+        // Skip while the name field is focused — this fully rebuilds the
+        // panel's innerHTML, which tears down and recreates the input,
+        // kicking the user out mid-keystroke. Deferring here just means a
+        // render that lands mid-typing catches up on the next trigger once
+        // the user blurs (snapshot fires, or the shimmer-swatch interval).
+        if (document.activeElement === container.querySelector('#mascot-name-input')) return;
         const pet = currentPet();
         container.innerHTML = `
           <div class="mascot-bank-line">${TOKEN_ICON} ${Math.floor(pet.__tokens).toLocaleString()} tokens</div>
