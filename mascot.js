@@ -2266,13 +2266,14 @@
   // small local state instead of dragging in expandedPet/frame/wandering
   // concerns that don't apply here.
   //
-  // opts: { pickerContainerId, previewSpriteId, previewGroundId }. The
-  // preview args are optional — omit them to render only the picker.
+  // opts: { pickerContainerId, previewSpriteId, previewGroundId, previewNameId }.
+  // The preview args are optional — omit them to render only the picker.
   window.initPetCustomizer = function (opts) {
     const container = document.getElementById(opts.pickerContainerId);
     if (!container) return;
     const previewSprite = opts.previewSpriteId ? document.getElementById(opts.previewSpriteId) : null;
     const previewGround = opts.previewGroundId ? document.getElementById(opts.previewGroundId) : null;
+    const previewName = opts.previewNameId ? document.getElementById(opts.previewNameId) : null;
     try {
       const user = window.currentHouseholdUser;
       const email = user && user.email ? user.email.toLowerCase() : '';
@@ -2352,8 +2353,8 @@
       // breathing swap the roaming widget does) is the one animation kept,
       // via its own tick below.
       function renderPreview(pet) {
-        if (!previewSprite) return;
-        renderSprite(previewSprite, pet, previewFrame, false, false);
+        if (previewSprite) renderSprite(previewSprite, pet, previewFrame, false, false);
+        if (previewName) previewName.innerHTML = petNameHtml(petKey, pet);
       }
 
       mascotRef().onSnapshot((snap) => {
