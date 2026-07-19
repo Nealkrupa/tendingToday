@@ -153,6 +153,18 @@ elapsed time since last visit, fueled by an AFK-hour bank.
 
 ## Cosmetic unlocks
 
+> **Partially superseded.** The "Milestone hats" described below no longer
+> render as a worn image on the sprite — see "Title rendering system
+> (shipped)" near the end of this doc. The underlying unlock ids/levels and
+> the base+trim art-construction *technique* are unchanged and still
+> accurate; what changed is that skill-tier unlocks now produce a title
+> next to the pet's name instead of an equipped hat image. The image
+> pipeline described here (base+trim hats, tier-tinted trim, shimmer on
+> max/completionist) still exists in `mascot.js`, just repointed at a
+> still-unbuilt **purchasable cosmetic hats** feature instead — see
+> `pet-assets/petCosmetics_notes.md`. "Active skill item" (the prop) below
+> is unaffected by any of this.
+
 Combination of two unlock types, both permanent once earned (skills never
 reset, only life stage does):
 
@@ -1496,3 +1508,105 @@ single grayscale layer tinted as a whole.
   completions high enough to reach Champion and confirmed it renders as a
   plain, untinted body with no console errors, using its placeholder empty
   trim as expected.
+
+## Title rendering system (shipped)
+
+Second of the three proposals from `pet-assets/petCosmetics_notes.md` to
+actually ship. Skill-tier unlocks (levels 25/50/75/90/99, plus
+completionist) no longer render as a worn hat image — they render as a
+WoW-style title next to the pet's name instead. Full design rationale
+(color-per-skill/tier table, the 16 title strings, why `Triple-Crown` got
+rejected for `Pinnacle`, the `background-clip: text` shimmer decision)
+lives in `pet-assets/petCosmetics_notes.md`; this section is the
+implementation record.
+
+- **`equippedHat` split into two independent fields.** `equippedTitle`
+  holds skill-tier ids (`{skill}-{tier}`, `{skill}-max`, `'completionist'`)
+  and drives the title; `equippedHat` is now reserved solely for the
+  still-unbuilt purchasable-hats feature. Neither field's ids changed
+  shape — only which field skill-tier ids live in, and what equipping one
+  visually produces.
+- **The image-hat pipeline was not touched.** `resolveHat()`, `hatHtml`
+  in `renderSprite`, `HAT_ANCHOR_STANDARD`/`HAT_ANCHOR_COMPLETIONIST`, the
+  hat entries in `ALL_ASSET_FILES`, and `precomputeHatTints` are all
+  exactly as they were — dormant until a buyable hat ever sets
+  `equippedHat` to something, per the "hand off, not delete" plan.
+- **New constants**: `TITLE_COLORS` (fixed hue per skill, escalating
+  saturation across 25/50/75/90/max) and `TITLE_WORDS` (the 15 locked
+  title strings) plus `COMPLETIONIST_TITLE = 'Pinnacle'`.
+- **`resolveTitle(titleId)`** parses the same id shapes `resolveHat()`
+  always used and returns `{ text, color, skill, tierKey }` instead of
+  image URLs.
+- **`titleTextStyle(title)`** is the one shared styling function behind
+  both the equipped name label and the customize-page picker buttons, so
+  a button's preview always exactly matches what equipping it produces:
+  standard tiers get a flat inline `color`; max tier gets a
+  `background-clip: text` gradient (`[color, white, color, white, color]`,
+  animated `background-position`, 2600ms period — matching the site's
+  existing shimmer-bar cadence elsewhere); completionist gets the same
+  technique built from the full `CYCLE_COLORS`/`CYCLE_TOTAL_MS` (9000ms)
+  the rainbow skin already uses, so both stay in sync if ever equipped
+  together. A shared `@keyframes mascot-title-shine` rule handles both —
+  only the gradient/size/duration/delay differ, passed via inline style.
+- **`titleHtml(pet)`** returns the badge (`SKILL_EMOJI[skill]` or 🏆) +
+  colored/shimmer title text, ready to prefix onto a display name.
+- **Custom pet display name**: new `petName` field (`null` by default,
+  falling back to `labelForPet(petKey)` — the signed-in household
+  member's own name — exactly as the name label worked before this
+  shipped). Edited via a new `setPetName()` + a plain text input on
+  `pet-customize.html`'s picker, defaulting its placeholder to that same
+  fallback name.
+- **The roaming widget's name label is no longer static-at-creation.**
+  `.mascot-slot-name` used to be set once when a pet's slot element was
+  first created and never touched again; it's now rebuilt every idle-frame
+  tick (same cadence as the sprite itself) via a new `petNameHtml()`
+  helper, so an equipped title or a renamed pet shows up live from another
+  device without needing a reload.
+- **Picker UI** (`buildCustomizeMarkup`, `pet-customize.html`): the "Hats
+  earned so far" button row became "Titles earned so far," each button
+  labeled with its actual title word rendered via `titleTextStyle` (not a
+  generic "🐟 25" placeholder), and a "Pet name" input + save button was
+  added above it.
+- **Devtools** (`mascot-devtools.html`): the force-equip grid now writes
+  `equippedTitle` (renamed "All titles" in the UI); a `petName` field row
+  was added; `equippedHat` stays present as its own field, ready for
+  buyable-hat testing later.
+- **Verified in the offline devtools harness:** equipped a locked
+  `fishing-max` title via the force-equip grid and confirmed the roaming
+  widget's name span rendered `🐟` + a `background-image` gradient
+  (`#0EA5E9, #ffffff, #0EA5E9, #ffffff, #0EA5E9`) text-clipped to
+  "Ace-Angler" + "Neal". Equipped `completionist` and confirmed the
+  gradient was the full 12-stop `CYCLE_COLORS` array at a 9000ms
+  animation duration, rendering "Pinnacle". Confirmed the *other* pet
+  (no title equipped) still showed a plain name with no badge. Drove the
+  real `initPetCustomizer` picker (not just the devtools force-grid) end
+  to end — clicked a `fishing-90` title button and saved a custom name
+  ("Nibbles") through the actual picker markup, and confirmed the roaming
+  widget immediately showed "🐟 Lake-Legend Nibbles" live. No console
+  errors at any step.
+
+### Timing tweaks (shipped, same session)
+
+Two unrelated small tuning changes landed alongside the title system:
+
+- **XP popup lasts longer.** `.mascot-xp-popup`'s `mascot-xp-float`
+  animation duration doubled, `1.3s` → `2.6s` — the popup removes itself
+  on `animationend`, so this is the only change needed to make the
+  floating "+N XP"/"+N🪙" text linger longer on screen.
+- **Post-action prop "working" flourish extended to 10 seconds.**
+  `POST_ACTION_FLOURISH_MS` changed `2500` → `10000` — this is the window
+  after any tracked action grants XP where the active-skill prop shows its
+  animated "working" state (see "Prop (tool) visual state simplifies to
+  two states, not three" above for what this flourish is/isn't).
+
+### Version bump
+
+`ASSET_VERSION` bumped `v=5` → `v=6`; the `mascot.js?v=49` script tag
+bumped to `v=50` on every page that loads it (`home.html`,
+`tending-today.html`, `grocery-list.html`, `notes.html`,
+`meal-planning.html`, `wishlist.html`, `house-projects.html`,
+`contacts.html`, `achievements.html`, `subscriptions.html`,
+`pet-customize.html`, and `mascot-devtools.html`) — done as a matter of
+course alongside this session's `mascot.js` changes, even though no
+`pet-assets/*.png` files themselves changed this time (the title system
+is pure text/CSS, no new art).

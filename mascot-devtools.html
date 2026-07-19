@@ -460,7 +460,7 @@
 </script>
 
 <script src="achievements.js?v=5"></script>
-<script src="mascot.js?v=49"></script>
+<script src="mascot.js?v=50"></script>
 
 <script>
 (function () {
@@ -610,7 +610,9 @@
       lastGrantedCounts: {},
       activeSkill: 'woodcutting',
       skillXP: { woodcutting: 0, gardening: 0, fishing: 0 },
+      equippedTitle: null,
       equippedHat: null,
+      petName: null,
       purchasedSkinColors: [],
       skinColor: '#5B7B9A',
       activeAfkBlock: null,
@@ -645,18 +647,20 @@
         SKILLS.map(function (s) {
           return '<div class="row"><label>' + s + ' XP (skillXP)</label><input type="number" step="1" data-field="skillXP.' + s + '" data-pet="' + petKey + '" value="' + (pet.skillXP[s] || 0) + '"></div>';
         }).join('') +
-        '<div class="row"><label>Equipped hat</label><input type="text" data-field="equippedHat" data-pet="' + petKey + '" value="' + (pet.equippedHat || '') + '" placeholder="e.g. woodcutting-25, woodcutting-max, completionist"></div>' +
+        '<div class="row"><label>Pet name</label><input type="text" data-field="petName" data-pet="' + petKey + '" value="' + (pet.petName || '') + '" placeholder="defaults to the signed-in user\'s name"></div>' +
+        '<div class="row"><label>Equipped title</label><input type="text" data-field="equippedTitle" data-pet="' + petKey + '" value="' + (pet.equippedTitle || '') + '" placeholder="e.g. woodcutting-25, woodcutting-max, completionist"></div>' +
+        '<div class="row"><label>Equipped hat</label><input type="text" data-field="equippedHat" data-pet="' + petKey + '" value="' + (pet.equippedHat || '') + '" placeholder="reserved for buyable hats — none exist yet"></div>' +
         '<div class="row"><label>Purchased skin colors</label><input type="text" data-field="purchasedSkinColors" data-pet="' + petKey + '" value="' + (pet.purchasedSkinColors || []).join(', ') + '" placeholder="comma-separated hex, e.g. #5C6E78, #3F7F73"></div>' +
         '<div class="row"><label>Skin color</label><input type="text" data-field="skinColor" data-pet="' + petKey + '" value="' + (pet.skinColor || '#5B7B9A') + '" placeholder="hex, or \'rainbow\' for the cycling skin"></div>' +
         '<div class="row"><button data-apply-pet="' + petKey + '">Apply this pet’s fields</button></div>' +
-        '<div class="dt-cosmetics-label">All hats — tap to force-equip (dim = not actually unlocked yet; forcing equips it anyway)</div>' +
+        '<div class="dt-cosmetics-label">All titles — tap to force-equip (dim = not actually unlocked yet; forcing equips it anyway)</div>' +
         '<div class="dt-grid">' +
-          '<button class="dt-hat-btn unlocked' + (!pet.equippedHat ? ' equipped' : '') + '" data-force-hat="' + petKey + '" data-hat-id="">None</button>' +
+          '<button class="dt-hat-btn unlocked' + (!pet.equippedTitle ? ' equipped' : '') + '" data-force-title="' + petKey + '" data-hat-id="">None</button>' +
           hatCatalog().map(function (h) {
             const unlocked = isHatUnlocked(pet, h);
-            const equipped = pet.equippedHat === h.id;
+            const equipped = pet.equippedTitle === h.id;
             return '<button class="dt-hat-btn' + (unlocked ? ' unlocked' : '') + (equipped ? ' equipped' : '') +
-              '" data-force-hat="' + petKey + '" data-hat-id="' + h.id + '" title="' +
+              '" data-force-title="' + petKey + '" data-hat-id="' + h.id + '" title="' +
               (unlocked ? 'unlocked' : 'locked — forcing equips it anyway') + '">' + h.label + '</button>';
           }).join('') +
         '</div>' +
@@ -716,11 +720,11 @@
         clearAfkBlock(petKey);
       });
     });
-    wrap.querySelectorAll('[data-force-hat]').forEach(function (btn) {
+    wrap.querySelectorAll('[data-force-title]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        const petKey = btn.getAttribute('data-force-hat');
+        const petKey = btn.getAttribute('data-force-title');
         const hatId = btn.getAttribute('data-hat-id');
-        forceSetPetField(petKey, 'equippedHat', hatId || null);
+        forceSetPetField(petKey, 'equippedTitle', hatId || null);
       });
     });
     wrap.querySelectorAll('[data-force-color]').forEach(function (btn) {
@@ -734,9 +738,9 @@
   // Directly sets one field on one pet and re-renders — used by the
   // cosmetics grids' "tap to force-equip" buttons, which intentionally
   // bypass the real unlock/purchase checks (this is a devtools shortcut for
-  // previewing any hat/color instantly, not a simulation of the real
+  // previewing any title/color instantly, not a simulation of the real
   // equip flow — that's what the text-field "Apply this pet's fields"
-  // button above already exercises for `equippedHat`/`skinColor`).
+  // button above already exercises for `equippedTitle`/`skinColor`).
   function forceSetPetField(petKey, field, value) {
     const mascotData = getMascot();
     const pets = Object.assign({}, mascotData.pets || {});
@@ -781,7 +785,7 @@
       if (field.indexOf('skillXP.') === 0) {
         const skill = field.split('.')[1];
         pet.skillXP = Object.assign({}, pet.skillXP, { [skill]: val });
-      } else if (field === 'equippedHat') {
+      } else if (field === 'equippedHat' || field === 'equippedTitle' || field === 'petName') {
         pet[field] = val.trim() ? val.trim() : null;
       } else if (field === 'purchasedSkinColors') {
         pet[field] = val.split(',').map(function (s) { return s.trim(); }).filter(Boolean);

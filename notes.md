@@ -379,26 +379,36 @@ page since its live counts never arrived.
   symmetrically, from whichever device happens to be open when the sync
   lands — it's not limited to "my own pet, only when I personally triggered
   the grant."
-- **Cosmetics** are two independent overlays, not per-life-stage art:
-  milestone hats (unlocked permanently at skill levels 25/50/75/90/99, plus
-  a "completionist" hat when every skill hits 99 — hat buttons show the
-  skill's emoji rather than spelling out its name) and an active-skill prop
-  (axe/rod/trowel) that swaps automatically with whichever skill is
-  currently set active. The hat renders **behind** the body and the prop
-  renders **in front of** it — full stack, back to front: hat → body →
-  prop. The prop is a simple two-state toggle: **working** (animated) for a
-  few seconds right after an action grants XP, or continuously while an AFK
-  block is active; **hidden entirely** otherwise, including while the pet is
-  actively wandering (see below), since a held tool mid-stride doesn't make
-  sense. Skin color has 4 free, on-theme colors plus 7 token-purchasable
-  colors across four price/flair tiers (Common/Uncommon/Rare, 5–40 tokens,
-  escalating from no flair to a shimmer glow — visible on the equipped pet
-  itself, not just the picker), topped by an 80-token Legendary tier
-  (currently just the Rainbow option) that smoothly cycles through hues.
-  Hat unlock status and the completionist check are always computed live
-  from current skill levels, never stored as an earned flag — only which
-  hat/skin color is currently *equipped* is persisted, the same
-  derive-don't-store approach used for life stage.
+- **Cosmetics** are three independent overlays, not per-life-stage art.
+  **Milestone skill unlocks (levels 25/50/75/90/99, plus a "completionist"
+  tier when every skill hits 99) render as a WoW-style title next to the
+  pet's name, not a worn image** — a skill emoji badge, then the tier's
+  own title word (e.g. "Ace-Angler"), colored in that skill's fixed hue at
+  an escalating vividness per tier, with a `background-clip: text` shimmer
+  sweep added only at max tier and a full-hue-cycle shimmer for the
+  completionist title ("Pinnacle"). This replaced an earlier version where
+  the same unlocks rendered as an actual hat image on the sprite — that
+  image-compositing pipeline (`resolveHat`, hat anchors, the hat PNGs) is
+  kept in `mascot.js`, not deleted, since it's earmarked for a still-
+  unbuilt **purchasable cosmetic hats** feature that reuses the same
+  base+trim construction. An **active-skill prop** (axe/rod/trowel) swaps
+  automatically with whichever skill is currently set active, rendering
+  **in front of** the body. The prop is a simple two-state toggle:
+  **working** (animated) for 10 seconds right after an action grants XP, or
+  continuously while an AFK block is active; **hidden entirely** otherwise,
+  including while the pet is actively wandering (see below), since a held
+  tool mid-stride doesn't make sense. Skin color has 4 free, on-theme
+  colors plus 7 token-purchasable colors across four price/flair tiers
+  (Common/Uncommon/Rare, 5–40 tokens, escalating from no flair to a shimmer
+  glow — visible on the equipped pet itself, not just the picker), topped
+  by an 80-token Legendary tier (currently just the Rainbow option) that
+  smoothly cycles through hues. Title unlock status and the completionist
+  check are always computed live from current skill levels, never stored
+  as an earned flag — only which title/skin color is currently *equipped*
+  is persisted, the same derive-don't-store approach used for life stage.
+  Each pet also has an optional **custom display name** (falls back to the
+  signed-in household member's own name until set), so an equipped title
+  reads as "🐟 Ace-Angler Nibbles" rather than prefixing a person's name.
 - **Tinting & smooth color-cycling:** body art ships as grayscale pixel art
   so each pet can have a user-chosen skin color; hat trims (grayscale) get
   their tier color from `achievements.js`'s existing `BADGE_PALETTES`
@@ -458,33 +468,34 @@ page since its live counts never arrived.
 - **Widget interaction** is progressive disclosure within the persistent
   widget for everything except cosmetics: tap a pet to see its 3 skill
   levels plus its token balance, a circular "?" button that reveals a brief
-  explainer of what tokens/AFK time/skin colors/hats do, and tap a skill
+  explainer of what tokens/AFK time/skin colors/titles do, and tap a skill
   pill to see that skill's full XP progress and, only on your own pet, a
   "train this skill" control. Setting a skill active and buying AFK time are
   user-initiated writes handled right there in the widget panel.
-- **Hat/skin-color picker lives on its own page**, `pet-customize.html`,
+- **Title/skin-color/name picker lives on its own page**, `pet-customize.html`,
   reached via a "🎨 Customize" link inside your own pet's panel (own-pet-only,
   same as the rest of the pet-editing controls) — not a hub card, since it's
   only ever reached from the widget itself. This used to be an expandable
-  section inline in the panel, but rendering every unlocked hat and every
-  premium color's swatch (each with its own canvas-tinted preview) on every
-  page load meant warming ~100+ tint combinations up front just in case
-  someone tapped "Customize" — see the tinting note above for why that was
-  actually a real page-load bottleneck, not just a theoretical one. Moving
-  the picker to its own page means the exhaustive precompute only runs when
-  someone's actually there to use it; every other page only ever needs the
-  one color/hat combo the pet is currently wearing. The page reuses
-  `mascot.js`'s existing helpers directly (`window.initPetCustomizer`,
-  `setEquippedHat`/`setSkinColor`/`purchaseSkinColor`, the same
-  `household/mascot-state` writes) rather than duplicating any logic, and its
-  back button (same circular icon-button treatment as every other page's
-  home button, just with a back-arrow glyph) defaults to `home.html` but
-  upgrades to `document.referrer` when that's same-origin, so it returns you
-  to whichever page you actually came from. Setting a skill active, buying
-  AFK time, and equipping a hat/color are the user-initiated writes in the
-  system beyond life stage — each updates only that one field on your own
-  pet, never the whole `pets` map, so it can't clobber the other person's
-  pet state.
+  section inline in the panel, but rendering every unlocked title and every
+  premium color's swatch (each with its own canvas-tinted or gradient
+  preview) on every page load meant warming ~100+ tint combinations up front
+  just in case someone tapped "Customize" — see the tinting note above for
+  why that was actually a real page-load bottleneck, not just a theoretical
+  one. Moving the picker to its own page means the exhaustive precompute
+  only runs when someone's actually there to use it; every other page only
+  ever needs the one color/title combo the pet is currently wearing. The
+  page reuses `mascot.js`'s existing helpers directly
+  (`window.initPetCustomizer`, `setEquippedTitle`/`setPetName`/
+  `setSkinColor`/`purchaseSkinColor`, the same `household/mascot-state`
+  writes) rather than duplicating any logic, and its back button (same
+  circular icon-button treatment as every other page's home button, just
+  with a back-arrow glyph) defaults to `home.html` but upgrades to
+  `document.referrer` when that's same-origin, so it returns you to
+  whichever page you actually came from. Setting a skill active, buying AFK
+  time, and equipping a title/color/name are the user-initiated writes in
+  the system beyond life stage — each updates only that one field on your
+  own pet, never the whole `pets` map, so it can't clobber the other
+  person's pet state.
 - **Large static preview on the customize page:** below the picker,
   `pet-customize.html` shows the pet at a much bigger scale (180×180px vs.
   the roaming widget's 56×56px) than anywhere else on the site, sitting in
@@ -839,7 +850,7 @@ everything *looks* like it worked.
 The same problem applies to the `pet-assets/*.png` files `mascot.js` loads,
 since the filename itself never changes when the art does. Those go through
 a separate `ASSET_VERSION` constant near the top of `mascot.js` (currently
-`'v=4'`) rather than a `<script>` tag's query string — every `assetUrl()`
+`'v=6'`) rather than a `<script>` tag's query string — every `assetUrl()`
 call appends it automatically. **Whenever any pet-assets PNG is replaced in
 place, bump `ASSET_VERSION`** (and, since that's an edit to `mascot.js`
 itself, bump its own script-tag version too, per the rule above).

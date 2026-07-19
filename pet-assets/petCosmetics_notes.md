@@ -4,12 +4,14 @@ Scratch doc for cosmetic systems layered on top of the shipped mascot
 (life stage, skills/tokens, hats, skin-color tiers — all documented in
 [petDesign_notes.md](petDesign_notes.md)). This is where new unlock
 ideas get roughed out before they turn into real spec/implementation,
-same "resolved vs. still open" split that doc already uses. One of the
-three proposals below (the body base/trim split) has since actually
-shipped — its real implementation record now lives in
-petDesign_notes.md's "Body art split into base + trim layers (shipped)"
-section, not here; this doc keeps only a short pointer to it. Buyable
-bodies and buyable hats are still unbuilt.
+same "resolved vs. still open" split that doc already uses. Two of the
+proposals below have since actually shipped — the body base/trim split
+and the title-rendering system that replaced skill hats' worn-image
+rendering. Both real implementation records live in petDesign_notes.md
+("Body art split into base + trim layers (shipped)" and "Title
+rendering system (shipped)"), not here; this doc keeps only short
+pointers to them. Buyable bodies and buyable hats are still unbuilt —
+**nothing in this doc should be coded until explicitly told to.**
 
 ## Currently shipped, for reference
 
@@ -21,12 +23,16 @@ bodies and buyable hats are still unbuilt.
   stages (Champion currently renders with an empty placeholder trim
   pending real two-layer art — see petDesign_notes.md). One fixed art
   set — no alternate body designs (eggs) exist yet.
-- **Hats**: base + trim two-layer PNGs per hat (base = fixed skill
-  identity color, trim = tier-tinted). Unlocked for free at skill
-  levels 25/50/75/90/99, plus the completionist hat. Nothing is
-  currently *purchasable* — every hat is an XP-gated unlock, tokens
-  only buy skin colors and AFK blocks today (`PREMIUM_SWATCHES` /
-  AFK-block table in petDesign_notes.md).
+- **Titles**: skill-level unlocks (25/50/75/90/99, plus completionist)
+  render as a colored/shimmer title next to the pet's name
+  (`equippedTitle`), not a worn hat image — see petDesign_notes.md's
+  "Title rendering system (shipped)". The old base+trim hat-image
+  pipeline (`resolveHat`, hat anchors, hat PNGs) still exists in
+  `mascot.js` untouched, just dormant — reserved for the still-unbuilt
+  buyable-hats proposal below, which will write to the separate
+  `equippedHat` field instead. Tokens only buy skin colors and AFK
+  blocks today (`PREMIUM_SWATCHES` / AFK-block table in
+  petDesign_notes.md) — nothing is purchasable yet.
 - **Anchoring**: every asset (body, hat base/trim, prop) shares one
   fixed 64×64 canvas and origin. Hats/props position via a per-stage
   head/hand anchor point, translated against the asset's own fixed
@@ -70,6 +76,33 @@ the existing skill hats, not a replacement — skill hats stay
 level-gated achievement items ("what has this pet accomplished"),
 buyable hats are a separate, parallel unlock track ("what did you
 spend tokens on").
+
+**Now the sole consumer of the image-hat pipeline — shipped, see
+petDesign_notes.md.** Skill hats stopped rendering as a worn image (see
+"Title rendering system (shipped)" in petDesign_notes.md); `hatHtml`/
+`resolveHat()`/the hat anchor constants/the hat entries in
+`ALL_ASSET_FILES` and `precomputeHatTints` all stayed in `mascot.js`
+exactly as they were — they're just dormant now, waiting for this
+still-unbuilt proposal to start feeding `equippedHat` instead of
+skill-tier unlocks. A real handoff, not a deletion.
+
+## Skill hat unlocks become ascending titles (WoW-style) — shipped
+
+**No longer a proposal — this shipped.** Skill-tier unlocks
+(25/50/75/90/99, plus completionist) now render as a title next to each
+pet's name — a skill badge, an escalating title word per tier, colored
+in that skill's fixed hue at rising vividness per tier, with a
+`background-clip: text` shimmer at max tier and a full-hue-cycle shimmer
+for completionist's `Pinnacle`. `equippedHat` split into `equippedTitle`
+(skill-tier ids) + `equippedHat` (buyable-hat ids only, going forward).
+A custom pet display name (`petName`, editable on the customize page,
+defaulting to the signed-in user's own name) shipped alongside it, so a
+title reads as "🐟 Ace-Angler Nibbles" rather than prefixing a person's
+name. See petDesign_notes.md's **"Title rendering system (shipped)"**
+section for the full implementation record (the locked color/title
+tables, the `titleTextStyle()` shimmer technique, the devtools updates,
+and verification) — kept there rather than duplicated here, per this
+doc's own intro note.
 
 ## Split body art into base + trim layers (like hats) — shipped
 
@@ -120,13 +153,13 @@ rather than duplicated here, per this doc's own intro note.
   hats**, not a replacement — skill hats stay the "what has this pet
   accomplished" achievement layer, buyable hats become the "what did
   you spend tokens on" layer.
-- **Buyable hats share the existing `equippedHat` slot** with skill
-  hats — one value drawing from a larger pool of ids (skill hats +
-  purchasable hats together), not a second accessory slot. No data
-  model change beyond more possible values.
-- **Buyable-hat storage shape:** `pets.<user>.purchasedHats: [...]`
-  alongside the existing `purchasedSkinColors`; `equippedHat` widened
-  to reference either pool.
+- **Buyable-hat storage shape (still applies post-shipping the title
+  split):** `pets.<user>.purchasedHats: [...]` alongside the existing
+  `purchasedSkinColors`; `equippedHat` refers only to that pool (the
+  title system's shipped `equippedTitle`/`equippedHat` split — see
+  petDesign_notes.md — already carved skill-tier ids out of this field,
+  so no further data-model change is needed here when buyable hats
+  actually ship).
 - **Stored art assets stay a fixed 64×64 canvas, always** — no
   re-exporting any asset (existing or future) at a cropped size, since
   every offset in `mascot.js` is a percentage of that hardcoded 64px
@@ -296,9 +329,10 @@ cosmetic asset themselves.
 
 ## Open questions
 
-None currently. The body base/trim split has shipped (see
-petDesign_notes.md). For the two still-unbuilt proposals — buyable
-bodies and buyable hats — every question raised while roughing them out
-already has a resolved answer in "Locked in." Next step for each is
-execution-level: picking real egg/hat art direction and prices, then
-implementing the purchase/equip flow in `mascot.js`.
+None currently. The body base/trim split and the title-rendering system
+have both shipped (see petDesign_notes.md). Buyable bodies and buyable
+hats — the two remaining proposals — have no open questions left either;
+every question raised while roughing them out already has a resolved
+answer in "Locked in." Next step for each is execution-level: real
+egg/hat art and prices, then the purchase/equip flow — **still not to be
+coded until explicitly told to.**

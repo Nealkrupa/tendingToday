@@ -82,6 +82,94 @@
   const HAT_TIER_LEVELS = [25, 50, 75, 90]; // standard-hat unlock tiers (99 = bespoke max hat, handled separately)
 
   // ---------------------------------------------------------------------
+  // Skill hat unlocks no longer render as a worn image — they render as an
+  // ascending title next to the pet's name instead (see
+  // petCosmetics_notes.md's "Skill hat unlocks become ascending titles").
+  // The image-hat pipeline below (resolveHat, hatHtml in renderSprite,
+  // hat anchors, ALL_ASSET_FILES' hat entries, precomputeHatTints) is kept
+  // exactly as-is, not deleted — it's earmarked for the still-unbuilt
+  // buyable-hats proposal instead, which reuses the same base+trim
+  // construction. `equippedTitle` (this section) and `equippedHat` (the
+  // pre-existing field, now dedicated solely to buyable hats going
+  // forward) are two independent fields for exactly that reason.
+  // ---------------------------------------------------------------------
+
+  // Fixed hue per skill, escalating saturation/vividness per tier — same
+  // ramp shape reused across all three skills (25 dullest, max richest).
+  // Max reuses that same hue rather than switching to a shared dedicated
+  // max-tier color the way hat tiers do; it's the shimmer (see
+  // titleTextStyle) that marks it as max, not a color swap.
+  const TITLE_COLORS = {
+    woodcutting: { 25: '#A88A6B', 50: '#B8763F', 75: '#CC7A1E', 90: '#E0791A', max: '#FF7A00' },
+    gardening: { 25: '#8FA37E', 50: '#6B9950', 75: '#4C9A2A', 90: '#3FBF3F', max: '#22C55E' },
+    fishing: { 25: '#6B8299', 50: '#4A7BA6', 75: '#2E6DB4', 90: '#1E7FD1', max: '#0EA5E9' }
+  };
+  // Ascending title word per skill/tier — content locked in
+  // petCosmetics_notes.md. Deliberately mixes single words and hyphenated
+  // compounds at every rung, not just low tiers.
+  const TITLE_WORDS = {
+    woodcutting: { 25: 'Chopper', 50: 'Splitter', 75: 'Feller', 90: 'Timber-Titan', max: 'Lumberjack' },
+    gardening: { 25: 'Sprout', 50: 'Weeder', 75: 'Grower', 90: 'Root-Ruler', max: 'Botanist' },
+    fishing: { 25: 'Chum', 50: 'Baiter', 75: 'Angler', 90: 'Lake-Legend', max: 'Ace-Angler' }
+  };
+  // Skill-count-agnostic on purpose (an earlier "Triple-Crown" idea baked
+  // in "3 skills" and would've needed retiring the moment a 4th shipped).
+  const COMPLETIONIST_TITLE = 'Pinnacle';
+
+  // Resolves an equippedTitle id into display text + color/tier info — the
+  // title-system counterpart to resolveHat() below, same id shapes
+  // (`{skill}-{tier}`, `{skill}-max`, `'completionist'`) since the
+  // underlying unlock ids didn't change, only what equipping one produces.
+  function resolveTitle(titleId) {
+    if (!titleId) return null;
+    if (titleId === 'completionist') return { text: COMPLETIONIST_TITLE, skill: null, tierKey: 'completionist' };
+    const maxMatch = /^(\w+)-max$/.exec(titleId);
+    if (maxMatch) {
+      const skill = maxMatch[1];
+      if (!TITLE_WORDS[skill]) return null;
+      return { text: TITLE_WORDS[skill].max, color: TITLE_COLORS[skill].max, skill, tierKey: 'max' };
+    }
+    const tierMatch = /^(\w+)-(\d+)$/.exec(titleId);
+    if (tierMatch) {
+      const skill = tierMatch[1];
+      const tier = parseInt(tierMatch[2], 10);
+      if (!TITLE_WORDS[skill] || !TITLE_WORDS[skill][tier]) return null;
+      return { text: TITLE_WORDS[skill][tier], color: TITLE_COLORS[skill][tier], skill, tierKey: tier };
+    }
+    return null;
+  }
+
+  // Inline style for one title's text — shared by the equipped name label
+  // (titleHtml) and the customize-page picker buttons, so both always look
+  // identical. Standard tiers are flat color; max tier adds a white
+  // shimmer sweep through that same color (background-clip: text, no
+  // image to mask against now that this is text, unlike hat-trim shimmer);
+  // completionist cycles through the same CYCLE_COLORS/CYCLE_TOTAL_MS the
+  // rainbow skin and completionist hat already use, so their timing stays
+  // in sync.
+  function titleTextStyle(title) {
+    if (title.tierKey === 'completionist') {
+      const stops = CYCLE_COLORS.concat([CYCLE_COLORS[0]]);
+      return `background-image:linear-gradient(90deg, ${stops.join(', ')});background-size:${stops.length * 100}% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:mascot-title-shine ${CYCLE_TOTAL_MS}ms linear infinite;animation-delay:${phaseDelay(CYCLE_TOTAL_MS)};`;
+    }
+    if (title.tierKey === 'max') {
+      const c = title.color;
+      const stops = [c, '#ffffff', c, '#ffffff', c];
+      return `background-image:linear-gradient(90deg, ${stops.join(', ')});background-size:400% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:mascot-title-shine 2600ms linear infinite;animation-delay:${phaseDelay(2600)};`;
+    }
+    return `color:${title.color};`;
+  }
+
+  // Badge + colored/shimmer title text + a trailing space, ready to prefix
+  // onto a pet's display name — empty string if no title is equipped.
+  function titleHtml(pet) {
+    const title = resolveTitle(pet.equippedTitle);
+    if (!title) return '';
+    const badge = title.skill ? SKILL_EMOJI[title.skill] : '🏆';
+    return `<span class="mascot-title-badge">${badge}</span><span class="mascot-title-text" style="${titleTextStyle(title)}">${title.text}</span> `;
+  }
+
+  // ---------------------------------------------------------------------
   // Progression redesign constants — see petDesign_notes.md's "Progression
   // system redesign" section for the full reasoning behind these numbers.
   // ---------------------------------------------------------------------
@@ -127,7 +215,7 @@
   // How long the prop shows its "working" animation right after a direct
   // action grants XP — a lightweight "you just earned XP" flourish,
   // distinct from the floating "+N XP" popup.
-  const POST_ACTION_FLOURISH_MS = 2500;
+  const POST_ACTION_FLOURISH_MS = 10000;
 
   // Life stage thresholds — monthProgress = liveTotal - baselineTotal.
   // Fresh 0-9 / In-Training 10-79 / Rookie 80-299 / Champion 300+.
@@ -165,7 +253,7 @@
   // the shared .js files) whenever a pet-assets PNG is replaced in place —
   // browsers otherwise keep serving the old cached bytes indefinitely, since
   // the filename itself never changes.
-  const ASSET_VERSION = 'v=5';
+  const ASSET_VERSION = 'v=6';
   const ASSET_BASE = 'pet-assets/';
   function assetUrl(file) { return ASSET_BASE + file + '?' + ASSET_VERSION; }
 
@@ -251,7 +339,9 @@
       lastGrantedCounts: {},
       activeSkill: 'woodcutting',
       skillXP: { woodcutting: 0, gardening: 0, fishing: 0 },
-      equippedHat: null,
+      equippedTitle: null,      // skill-tier ids ({skill}-{tier}, {skill}-max, 'completionist') — resolveTitle()
+      equippedHat: null,        // buyable-hat ids only, going forward — resolveHat()
+      petName: null,            // custom display name; falls back to labelForPet(petKey) when unset
       purchasedSkinColors: [],  // hex codes owned beyond the free SWATCH_COLORS
       skinColor: DEFAULT_SKIN_COLORS[petKey] || '#5B7B9A',
       activeAfkBlock: null,     // or { hours, price, startedAt, xpGrantedSoFar }
@@ -329,12 +419,12 @@
           pet.tokensSpent = 0;
           pet.lastGrantedCounts = Object.assign({}, counts);
           pet.skillXP = { woodcutting: 0, gardening: 0, fishing: 0 };
-          // Reset alongside skillXP, not left alone — resolveHat() doesn't
-          // re-validate that an equipped hat is still unlocked at the
+          // Reset alongside skillXP, not left alone — resolveTitle() doesn't
+          // re-validate that an equipped title is still unlocked at the
           // pet's current level, it just renders whatever id is stored, so
-          // an un-reset equippedHat would keep showing a hat the reset
+          // an un-reset equippedTitle would keep showing a title the reset
           // skillXP no longer actually earns.
-          pet.equippedHat = null;
+          pet.equippedTitle = null;
           pet.activeAfkBlock = null;
           pet.lastBlockGrantAt = null;
           if (isLegacyPet) {
@@ -445,6 +535,14 @@
     mascotRef().set({ pets: { [petKey]: { equippedHat: hatId } } }, { merge: true })
       .catch((e) => console.error('Mascot setEquippedHat failed', e));
   }
+  function setEquippedTitle(petKey, titleId) {
+    mascotRef().set({ pets: { [petKey]: { equippedTitle: titleId } } }, { merge: true })
+      .catch((e) => console.error('Mascot setEquippedTitle failed', e));
+  }
+  function setPetName(petKey, name) {
+    mascotRef().set({ pets: { [petKey]: { petName: name || null } } }, { merge: true })
+      .catch((e) => console.error('Mascot setPetName failed', e));
+  }
   function setSkinColor(petKey, color) {
     mascotRef().set({ pets: { [petKey]: { skinColor: color } } }, { merge: true })
       .catch((e) => console.error('Mascot setSkinColor failed', e));
@@ -529,16 +627,28 @@
     return out;
   }
 
-  // Builds the hat/skin-color picker markup for one pet — shared by
+  // Builds the title/skin-color picker markup for one pet — shared by
   // pet-customize.html's initPetCustomizer below (the only place this still
   // renders; the inline widget panel just links there instead, see
-  // renderPanel's ownControlsHtml).
-  function buildCustomizeMarkup(pet) {
+  // renderPanel's ownControlsHtml). `defaultName` is what the pet-name
+  // input's placeholder falls back to when no custom name is set yet
+  // (the signed-in user's own name, same as the roaming widget shows).
+  function buildCustomizeMarkup(pet, defaultName) {
     const unlocked = unlockedHatsForPet(pet);
-    const equipped = pet.equippedHat || '';
-    const hatButtons = [`<button class="mascot-hat-btn${equipped === '' ? ' mascot-hat-equipped' : ''}" data-hat="">None</button>`]
-      .concat(unlocked.map((h) => `<button class="mascot-hat-btn${equipped === h.id ? ' mascot-hat-equipped' : ''}" data-hat="${h.id}">${hatLabel(h)}</button>`))
+    const equippedTitle = pet.equippedTitle || '';
+    // Each button previews the exact same colored/shimmer text the
+    // equipped title renders as next to the pet's name (titleTextStyle),
+    // so picking one is a true preview, not a guess.
+    const titleButtons = [`<button class="mascot-hat-btn${equippedTitle === '' ? ' mascot-hat-equipped' : ''}" data-title="">None</button>`]
+      .concat(unlocked.map((h) => {
+        const resolved = resolveTitle(h.id);
+        const badge = h.kind === 'completionist' ? '🏆' : SKILL_EMOJI[h.skill];
+        const label = resolved ? `${badge} <span style="${titleTextStyle(resolved)}">${resolved.text}</span>` : hatLabel(h);
+        return `<button class="mascot-hat-btn${equippedTitle === h.id ? ' mascot-hat-equipped' : ''}" data-title="${h.id}">${label}</button>`;
+      }))
       .join('');
+    const nameValue = (pet.petName || '').replace(/"/g, '&quot;');
+    const namePlaceholder = (defaultName || '').replace(/"/g, '&quot;');
     const freeSwatchesHtml = SWATCH_COLORS.map((c) => `<div class="mascot-swatch${pet.skinColor === c ? ' mascot-swatch-active' : ''}" data-color="${c}" style="background:${c};"></div>`).join('');
     const ownedPremium = pet.purchasedSkinColors || [];
     // Group premium swatches by tier (Common/Uncommon/Rare) — the array is
@@ -580,8 +690,13 @@
       return `<div class="mascot-xp-line" style="margin-top:6px;">${g.label} (${g.price}${TOKEN_ICON}):</div><div class="mascot-swatch-row">${swatchesHtml}</div>`;
     }).join('');
     return `
-      <div class="mascot-xp-line">Hats earned so far — tap to equip:</div>
-      <div class="mascot-hat-list">${hatButtons}</div>
+      <div class="mascot-xp-line">Pet name:</div>
+      <div class="mascot-name-row">
+        <input type="text" class="mascot-name-input" id="mascot-name-input" value="${nameValue}" placeholder="${namePlaceholder}">
+        <button class="mascot-hat-btn" id="mascot-name-save">Save</button>
+      </div>
+      <div class="mascot-xp-line" style="margin-top:8px;">Titles earned so far — tap to equip:</div>
+      <div class="mascot-hat-list">${titleButtons}</div>
       <div class="mascot-xp-line" style="margin-top:8px;">Skin color:</div>
       <div class="mascot-swatch-row">${freeSwatchesHtml}</div>
       ${premiumTiersHtml}
@@ -739,6 +854,15 @@
       color: var(--muted, #6B7568);
       font-family: 'IBM Plex Mono', monospace;
     }
+    .mascot-title-badge { margin-right: 2px; }
+    .mascot-title-text { font-weight: 700; }
+    /* Shared by the equipped title's shimmer and the completionist cycle
+       (titleTextStyle) — background-image/size/duration/delay come in via
+       inline style per equip, this just moves whatever gradient is set. */
+    @keyframes mascot-title-shine {
+      0% { background-position: 0% 0; }
+      100% { background-position: -100% 0; }
+    }
     .mascot-sprite-box {
       position: relative;
       width: 56px;
@@ -828,7 +952,7 @@
       font-weight: 700;
       color: var(--gold, #C08A2E);
       text-shadow: 0 1px 2px rgba(0,0,0,0.25);
-      animation: mascot-xp-float 1.3s ease-out forwards;
+      animation: mascot-xp-float 2.6s ease-out forwards;
       white-space: nowrap;
     }
     @keyframes mascot-xp-float {
@@ -940,6 +1064,19 @@
       border-color: var(--sage, #7C9075);
     }
     .mascot-hat-list { display: flex; flex-wrap: wrap; margin-top: 6px; }
+    .mascot-name-row { display: flex; gap: 6px; margin-top: 6px; }
+    .mascot-name-input {
+      flex: 1;
+      min-width: 0;
+      font-family: inherit;
+      font-size: 12px;
+      padding: 6px 9px;
+      border-radius: 8px;
+      border: 1.5px solid var(--line, #DDE3D6);
+      background: var(--card, #FFFFFF);
+      color: var(--ink, #263029);
+      outline: none;
+    }
     .mascot-swatch-row { display: flex; gap: 6px; margin-top: 8px; }
     .mascot-swatch {
       position: relative;
@@ -1722,6 +1859,21 @@
     return FALLBACK_LABELS[petKey] || petKey;
   }
 
+  // The pet's own custom name if it's been set, else the same
+  // signed-in-user-name fallback labelForPet() already used before pet
+  // names existed.
+  function displayNameForPet(petKey, pet) {
+    return (pet && pet.petName) || labelForPet(petKey);
+  }
+
+  // Equipped title (badge + colored/shimmer word) prefixed onto the pet's
+  // display name, e.g. "🐟 Ace-Angler Nibbles" — rebuilt fresh here rather
+  // than cached, since equippedTitle/petName can change from another
+  // device at any time via the live mascot-state subscription.
+  function petNameHtml(petKey, pet) {
+    return titleHtml(pet) + displayNameForPet(petKey, pet);
+  }
+
   function render() {
     const root = ensureDom();
     if (!widgetState.mascotDoc && !widgetState.counts) return; // nothing to show yet
@@ -1746,7 +1898,7 @@
         slot.className = 'mascot-slot';
         slot.type = 'button';
         slot.style.left = motion.x + 'px';
-        slot.innerHTML = `<div class="mascot-sprite-box" id="mascot-sprite-${key}"></div><span class="mascot-slot-name">${labelForPet(key)}</span>`;
+        slot.innerHTML = `<div class="mascot-sprite-box" id="mascot-sprite-${key}"></div><span class="mascot-slot-name"></span>`;
         slot.addEventListener('click', () => {
           widgetState.expandedPet = widgetState.expandedPet === key ? null : key;
           widgetState.expandedSkill = null;
@@ -1771,6 +1923,10 @@
       // moving *right* that needs the flip, not left.
       spriteBox.style.transform = motion.facing === 'right' ? 'scaleX(-1)' : 'scaleX(1)';
       renderSprite(spriteBox, pet, widgetState.frame, motion.walking);
+      // Rebuilt every tick (same reasoning as the sprite above) so an
+      // equipped title/pet-name change from another device shows up live,
+      // not just on next page load.
+      slot.querySelector('.mascot-slot-name').innerHTML = petNameHtml(key, pet);
     });
 
     renderPanel(pets);
@@ -2100,11 +2256,16 @@
         const pet = currentPet();
         container.innerHTML = `
           <div class="mascot-bank-line">${TOKEN_ICON} ${Math.floor(pet.__tokens).toLocaleString()} tokens</div>
-          ${buildCustomizeMarkup(pet)}
+          ${buildCustomizeMarkup(pet, labelForPet(petKey))}
         `;
-        container.querySelectorAll('.mascot-hat-btn').forEach((el) => {
-          el.addEventListener('click', () => { setEquippedHat(petKey, el.getAttribute('data-hat') || null); });
+        container.querySelectorAll('[data-title]').forEach((el) => {
+          el.addEventListener('click', () => { setEquippedTitle(petKey, el.getAttribute('data-title') || null); });
         });
+        const nameInput = container.querySelector('#mascot-name-input');
+        const nameSaveBtn = container.querySelector('#mascot-name-save');
+        if (nameSaveBtn) {
+          nameSaveBtn.addEventListener('click', () => { setPetName(petKey, nameInput.value.trim()); });
+        }
         container.querySelectorAll('.mascot-swatch[data-color]').forEach((el) => {
           el.addEventListener('click', () => { setSkinColor(petKey, el.getAttribute('data-color')); });
         });
