@@ -2008,24 +2008,30 @@
   }
 
   // Names now render above each sprite (see slot.innerHTML above) rather
-  // than below it, so two pets wandering close together can end up with
-  // overlapping name/title labels even though their sprites themselves stay
-  // MIN_PET_SEPARATION_PX apart. Sorts pets left-to-right and lifts each
-  // name that horizontally overlaps the previous one an extra notch higher,
-  // cascading if three-plus pets ever bunch up. translateY only, so it never
-  // touches the horizontal `left` each name inherits from its slot.
+  // than below it. Triggered off the *sprites'* live overlap, not the name
+  // labels' — MIN_PET_SEPARATION_PX already keeps resting sprite spots ~17px
+  // apart, close enough that two wide title/name labels can brush without
+  // the pets themselves ever crossing, so checking label overlap instead
+  // made names hop apart well before the pets actually met. Sprite overlap
+  // only happens transiently while one pet glides past the other, which is
+  // exactly the "crossing" moment this should react to. Sorts pets
+  // left-to-right and lifts each name whose sprite horizontally overlaps the
+  // previous one an extra notch higher, cascading if three-plus pets ever
+  // bunch up. translateY only, so it never touches the horizontal `left`
+  // each name inherits from its slot.
   const NAME_STACK_OFFSET_PX = 14;
   function updateMascotNameStacking() {
     const entries = PET_KEYS.map((key) => {
       const slot = document.getElementById('mascot-slot-' + key);
       const nameEl = slot && slot.querySelector('.mascot-slot-name');
-      return nameEl ? { nameEl, left: parseFloat(slot.style.left) || 0 } : null;
+      const spriteBox = slot && slot.querySelector('.mascot-sprite-box');
+      return (nameEl && spriteBox) ? { nameEl, spriteBox } : null;
     }).filter(Boolean);
-    entries.sort((a, b) => a.left - b.left);
+    entries.sort((a, b) => a.spriteBox.getBoundingClientRect().left - b.spriteBox.getBoundingClientRect().left);
     let prevRect = null;
     let level = 0;
     entries.forEach((entry) => {
-      const rect = entry.nameEl.getBoundingClientRect();
+      const rect = entry.spriteBox.getBoundingClientRect();
       level = (prevRect && rect.left < prevRect.right) ? level + 1 : 0;
       entry.nameEl.style.transform = level ? 'translateY(-' + (NAME_STACK_OFFSET_PX * level) + 'px)' : '';
       prevRect = rect;

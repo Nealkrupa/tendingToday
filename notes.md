@@ -662,14 +662,19 @@ page since its live counts never arrived.
   Each pet's name/title label renders **above** its sprite (not below —
   the sprite stays anchored to the ground line either way, since `bottom:
   4px` sits on the slot as a whole and the label is just the flex item
-  stacked above it). That sprite-separation minimum doesn't account for
-  label width, though, so two pets standing close enough can still end up
-  with overlapping name/title text even though their sprites themselves
-  never touch. `updateMascotNameStacking()` runs every render tick to fix
-  that: it sorts pets left-to-right and, for any name that horizontally
-  overlaps the previous one, nudges it up an extra 14px via `translateY`
-  (cascading further for a third pet if one's ever added), snapping back
-  to its normal spot the moment the overlap clears. The XP/token "+N" drop
+  stacked above it). A wide title/name label can still visually brush the
+  next pet's even while both sprites sit at their normal, separated resting
+  spots (the ~17px gap `MIN_PET_SEPARATION_PX` leaves is comfortable for
+  the sprites but not always for text), so `updateMascotNameStacking()`
+  deliberately keys off the **sprites'** own live overlap, not the labels' —
+  checking label overlap instead made names hop apart well before the pets
+  actually met. Sprite overlap only happens transiently while one pet
+  glides past the other, i.e. only at the moment they're actually crossing.
+  It runs every render tick: sorts pets left-to-right and, for any sprite
+  that horizontally overlaps the previous one, nudges that pet's name up an
+  extra 14px via `translateY` (cascading further for a third pet if one's
+  ever added), snapping back down the moment the sprites clear each other.
+  The XP/token "+N" drop
   popups (`showXpPopup`/`showTokenPopup`) spawn from that same name
   label's live bounding rect rather than the sprite's, so they always
   clear the label — including a stacked one — before floating upward,
