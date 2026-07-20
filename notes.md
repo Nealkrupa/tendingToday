@@ -468,8 +468,14 @@ page since its live counts never arrived.
   purchasable AFK-time blocks (1h/2h/5h/10h, priced on a discount curve from
   5 to 35 tokens — while a block is active the prop animates and XP trickles
   in on its own based on real elapsed time, capped to what was actually
-  purchased) and on skin colors (see Cosmetics below). Whenever XP or tokens
-  increase — detected by diffing each live Firestore snapshot against the
+  purchased) and on skin colors (see Cosmetics below). Both spends are gated
+  behind a native `confirm()` prompt ("Spend N 🪙️ tokens on…") right before
+  the click handler calls `purchaseAfkBlock`/`purchaseSkinColor` — the
+  purchase functions themselves are unchanged (still transactional, still
+  re-check affordability against a fresh Firestore read), the prompt just
+  sits in front of the click so a mis-tap can't silently drain the balance.
+  Whenever XP or tokens increase — detected by diffing each live Firestore
+  snapshot against the
   previous one, same client-side comparison technique the Star Board's
   milestone banner uses — a floating "+&lt;emoji&gt;N" or "+N🪙" popup
   appears over the relevant pet/widget. This fires for both pets
@@ -652,7 +658,22 @@ page since its live counts never arrived.
   Picking each pet's next wander target also actively avoids the other
   pet's current spot (`pickWanderTarget`, min separation ~1.3× the sprite
   size, retried a few times and falling back to the largest free gap) so
-  the two pets don't settle visually on top of each other. Separately, a
+  the two pets don't settle visually on top of each other.
+  Each pet's name/title label renders **above** its sprite (not below —
+  the sprite stays anchored to the ground line either way, since `bottom:
+  4px` sits on the slot as a whole and the label is just the flex item
+  stacked above it). That sprite-separation minimum doesn't account for
+  label width, though, so two pets standing close enough can still end up
+  with overlapping name/title text even though their sprites themselves
+  never touch. `updateMascotNameStacking()` runs every render tick to fix
+  that: it sorts pets left-to-right and, for any name that horizontally
+  overlaps the previous one, nudges it up an extra 14px via `translateY`
+  (cascading further for a third pet if one's ever added), snapping back
+  to its normal spot the moment the overlap clears. The XP/token "+N" drop
+  popups (`showXpPopup`/`showTokenPopup`) spawn from that same name
+  label's live bounding rect rather than the sprite's, so they always
+  clear the label — including a stacked one — before floating upward,
+  instead of rising up through the text. Separately, a
   debounced `resize` listener re-clamps any pet whose `x` has fallen
   outside the ground's current walkable width (e.g. after a mobile
   orientation change or address-bar collapse/expand) — without it, a pet
