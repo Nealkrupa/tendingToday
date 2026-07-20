@@ -152,7 +152,11 @@ at most once per date, and updates the streak: consecutive perfect days grow
 `streak.current`, a gap resets it to 1, and `streak.best` keeps the record.
 Perfect days are deliberately never revoked once earned, even if a task is
 unchecked afterward — revoking would make streak math ambiguous and feels
-punitive for a mis-click.
+punitive for a mis-click. `recordPerfectDay()` now also *returns* the
+resulting `{current, best}` streak (previously fire-and-forget with no
+return value), so a caller can tell in the same round trip whether today's
+completion also closed out a 7-day run — see Tending Today's completion
+effects below, its only consumer so far.
 
 **Star math.** On the board, each achievement type shows its count as a star
 cluster: small star = 1, medium = 10, large = 100 (e.g. 137 → one large,
@@ -199,6 +203,99 @@ checking things off at the same moment can't both think they were "first."
 All counts live in `household/achievements-state` under a `counts` map,
 using Firestore atomic increments so simultaneous check-offs from two
 devices can't clobber each other.
+
+## Tending Today completion effects
+
+Checking off the last Daily Foundation, or (on a Saturday) closing out a full
+7-day perfect-day streak, plays a full-screen celebration and leaves a
+persistent, scoped visual reward for the rest of that day — all in
+`tending-today.html`, no new Firestore documents.
+
+**Trigger.** The existing click handler for `[data-daily]` already checks
+`DAILY_TASKS.every(t => state.daily[t.id])` to call `recordPerfectDay()`; it
+now also awaits that call's returned `{current, best}` streak and treats it
+as a **perfect week** if `new Date().getDay() === 6` (Saturday) and
+`current >= 7` — since a same-day-ending 7-day streak on a Sunday-anchored
+week key can only mean every day since that Sunday was perfect, this needed
+no new stored data beyond the existing streak. The result is stashed on
+`state.perfectWeekAchieved` (reset to `false` alongside `state.daily` on the
+next new day in `normalizeAndReset`) so the richer treatment survives page
+reloads for the rest of that Saturday, the same lazy-reset pattern used
+elsewhere on this page.
+
+**Two-tier reward scale, not one effect scaled up.** An early version made
+"perfect week" just a bigger/brighter version of "perfect day" — full-screen
+tint and a longer sweep — and it didn't read as a real step up. The fix
+follows the pattern the Star Board already uses (shimmer/sweep motion
+reserved for genuine milestones, not every tier-up): a perfect day rings +
+shimmers **only the Daily Foundations box** (gold); a perfect week does the
+same to **every section box** (gold+rose together) and adds a small
+faceted star badge — see below — that a plain daily completion never gets.
+Scope (one box vs. all of them) carries the "bigger win" signal, not just
+louder colors.
+
+**Box-level shimmer geometry.** `.section.fx-glow` / `.fx-glow-week` add a
+ring (`box-shadow`) plus a `::after` pseudo-element that sweeps a soft
+diagonal gradient across the box on a loop (`box-shimmer-sweep` keyframes),
+using `mix-blend-mode: screen` so the highlight lightens whatever's under it
+rather than needing a hardcoded color per box background. **Known tradeoff:**
+`screen` blending against a *pure white* background can never get any
+lighter than white — so on the Daily Foundations box specifically (plain
+white `var(--card)` in light mode), the shimmer sweep is invisible; only its
+`box-shadow` ring shows. This was tried both ways: a `color-mix()`-based
+direct alpha overlay fixed the visibility gap but was reverted back to
+`mix-blend-mode: screen` on request. If this needs revisiting, the fix is a
+direct translucent overlay (no blend mode) rather than a lightening blend,
+since a lightening blend mode is mathematically inert against white
+regardless of which highlight color or opacity is used.
+
+The travel distance matters as much as the timing: the sweep's `inset` and
+`translateX` range are sized to roughly match the gradient band's own width
+(not a much larger virtual canvas), so nearly the whole animated duration is
+actually on-screen rather than the band spending most of its cycle sliding
+across empty space outside the box before ever becoming visible — that
+mismatch was the real cause of an early version feeling like it had "way too
+much dead time" between passes, independent of the keyframe percentages
+themselves. Current pacing is a short pause at each end
+(`0%,6%`/`94%,100%`) with the rest of the cycle spent crossing, 4s for a
+perfect day and 2.8s for a perfect week (`FX_GLOW_DURATION` /
+`FX_GLOW_WEEK_DURATION` in the JS, must stay equal to the CSS
+`animation-duration` values — see sync note below).
+
+**Staying in sync across re-renders.** `render()` rebuilds `app.innerHTML`
+from scratch on *every* interaction, even ones unrelated to Daily
+Foundations (checking a Zone or Pet Upkeep box, for instance) — which
+recreates every `.section` DOM node and would otherwise restart each box's
+CSS animation from frame zero, letting multiple boxes' shimmer sweeps drift
+out of phase with each other after enough unrelated clicks. Fixed by
+`syncedAnimationDelay(durationSec)`: computes `-(Date.now()/1000 %
+durationSec)` and sets it as each box's `--fx-delay` custom property (read
+by `animation-delay: var(--fx-delay, 0s)`) every time `renderFoundationsFx()`
+runs. A negative delay phase-locks the animation to wall-clock time instead
+of to whenever the element happened to be created, so freshly recreated
+boxes always resume mid-cycle at the same point their siblings are at.
+
+**The perfect-week star badge.** `weekEmblemSVG()` builds a small faceted
+star (7 points, rays, a ring, a gold→rose radial gradient body) directly
+reusing the silhouette-clipped shimmer technique from `achievements.html`'s
+own `emblemSVG` — a diagonal highlight bar clipped to the star's exact
+outline via an SVG `clipPath`, so the "big win" state visibly borrows the
+Star Board's own prestige marker rather than inventing a new one. It appears
+as a fixed corner badge (bottom-right, `#foundations-week-badge`) with a
+spring-scale entrance, persists for the rest of a perfect-week Saturday, and
+uses a fixed gold/rose palette rather than cycling through the Star Board's
+6-palette prestige rotation (a deliberate simplification — this badge marks
+one specific milestone, not an open-ended lifetime ladder).
+
+**One-shot intro vs. persistent state.** `playFoundationsEffect(isPerfectWeek)`
+plays once, on the click that completes the day/week: a still radial bloom
+plus a centered Fraunces message card for a plain day, or a two-tone
+diagonal sweep (the same gold→rose motif) plus the star badge's entrance for
+a perfect week. `renderFoundationsFx()` is the separate, idempotent
+persistent-state function — called at the end of every `render()` — that
+derives whether the day/week glow should currently be showing purely from
+`state`, with no separate "is it showing" flag to drift out of sync with
+the underlying data.
 
 ## Permanent per-page progress counts
 
@@ -706,7 +803,10 @@ document ID rather than the collection wildcard above.
 **Tending Today** — daily checklist resets each day; the "zone of the day"
 rotates by day of week; the monthly rotisserie cycles through 12 deep-clean
 tasks one per week; pet brushing tracks 3 passes/week. Weekly items reset based
-on an ISO-ish week key computed from the date.
+on an ISO-ish week key computed from the date. Completing all Daily
+Foundations (and, on Saturday, a full 7-day streak) triggers a full-screen
+celebration and a persistent scoped shimmer — see "Tending Today completion
+effects" above.
 
 **Grocery List** — plain add/check/remove list. Checked items sink to the
 bottom and can be bulk-cleared with "Clear checked."

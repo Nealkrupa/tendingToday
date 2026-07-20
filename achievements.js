@@ -145,15 +145,19 @@
     return BADGE_PALETTES[(tier - 4) % BADGE_PALETTES.length];
   };
 
+  // Returns the resulting { current, best } streak so callers (e.g. the
+  // full-screen "foundations complete" effect) can tell whether today's
+  // completion also closed out a perfect week, without a second read.
   window.recordPerfectDay = async function (todayStr) {
     try {
       const db = firebase.firestore();
       const ref = db.collection('household').doc('achievements-state');
+      let result = null;
       await db.runTransaction(async (tx) => {
         const snap = await tx.get(ref);
         const data = snap.exists ? snap.data() : {};
         const streak = data.streak || { current: 0, best: 0, lastPerfectDate: '' };
-        if (streak.lastPerfectDate === todayStr) return; // already recorded today
+        if (streak.lastPerfectDate === todayStr) { result = { current: streak.current || 0, best: streak.best || 0 }; return; } // already recorded today
         const y = new Date(todayStr + 'T12:00:00');
         y.setDate(y.getDate() - 1);
         const yesterdayStr = y.getFullYear() + '-' + String(y.getMonth() + 1).padStart(2, '0') + '-' + String(y.getDate()).padStart(2, '0');
@@ -166,9 +170,12 @@
         counts['day:perfect'] = newVal;
         stampMilestones(milestones, 'day:perfect', oldVal, newVal);
         tx.set(ref, { streak: { current, best, lastPerfectDate: todayStr }, counts, milestones }, { merge: true });
+        result = { current, best };
       });
+      return result;
     } catch (e) {
       console.error('Perfect day tracking failed', e);
+      return null;
     }
   };
 })();

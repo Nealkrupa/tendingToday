@@ -326,6 +326,223 @@
     color: var(--muted);
     font-size: 14px;
   }
+
+  /* Persistent tint/border shimmer: shown for the rest of the day once all
+     Daily Foundations are checked off. `.week` swaps in a richer palette and
+     stronger glow for the remainder of a Saturday that also closed out a
+     perfect week. */
+  /* Persistent full-screen tint for the rest of the day once all Daily
+     Foundations are checked off. Bolder than a first pass: at these
+     opacities the color reads immediately instead of needing a second
+     look. `.week` swaps gold for gold+rose together (richer, not just
+     recolored) to match the box-level and corner-star treatments below. */
+  #foundations-fx {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 40;
+    opacity: 0;
+    overflow: hidden;
+    transition: opacity 0.7s ease;
+  }
+  #foundations-fx.active { opacity: 1; }
+  #foundations-fx .fx-tint {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, transparent 48%, var(--gold) 150%);
+    opacity: 0.11;
+  }
+  #foundations-fx .fx-border {
+    position: absolute;
+    inset: 0;
+    box-shadow: inset 0 0 44px 7px var(--gold);
+    opacity: 0.32;
+  }
+  #foundations-fx.week .fx-tint {
+    background: radial-gradient(ellipse at 50% 0%, transparent 40%, var(--rose) 155%);
+    opacity: 0.2;
+  }
+  #foundations-fx.week .fx-border {
+    box-shadow: inset 0 0 60px 10px var(--rose);
+    opacity: 0.48;
+  }
+
+  /* Box-level shimmer: the effect that actually lives where the eye is —
+     and the ONLY shimmer motion in the whole persistent effect. There is
+     deliberately no page-wide traveling light: that used to sweep straight
+     over incomplete boxes too. A perfect day rings + sweeps just the Daily
+     Foundations box in gold; a perfect week does the same to every section
+     box, gold+rose together, so "day" vs "week" reads as a clear step up.
+     Each box's animation-delay is phase-locked to wall-clock time (see
+     `syncedAnimationDelay` in JS) rather than to when its DOM node happened
+     to be (re)created — otherwise an unrelated re-render elsewhere on the
+     page restarts that box's sweep from zero and it drifts out of sync
+     with the others. */
+  .section.fx-glow {
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.06), 0 0 0 1.5px var(--gold), 0 0 20px 2px rgba(192,138,46,0.4);
+  }
+  .section.fx-glow::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg,
+      transparent 20%,
+      rgba(255,246,214,0.10) 35%,
+      rgba(255,246,214,0.55) 50%,
+      rgba(255,246,214,0.10) 65%,
+      transparent 80%);
+    transform: translateX(-80%);
+    animation: box-shimmer-sweep 4s ease-in-out infinite;
+    animation-delay: var(--fx-delay, 0s);
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+  .section.fx-glow-week {
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(38,48,41,0.06), 0 0 0 1.5px var(--rose), 0 0 24px 3px rgba(180,99,111,0.45);
+  }
+  .section.fx-glow-week::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg,
+      transparent 16%,
+      rgba(255,246,214,0.12) 32%,
+      rgba(255,246,214,0.6) 46%,
+      rgba(255,205,210,0.65) 54%,
+      rgba(255,205,210,0.12) 68%,
+      transparent 84%);
+    transform: translateX(-80%);
+    animation: box-shimmer-sweep 2.8s ease-in-out infinite;
+    animation-delay: var(--fx-delay, 0s);
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+  /* Previously this traveled ±170% while inset -15% beyond the box —
+     several box-widths of travel for a box-width of visible space, so
+     most of each "sweep" was actually off-canvas. Now inset:0 and the
+     travel distance (±80%) is sized to the gradient's own band width, so
+     the band is on-canvas for nearly the whole animated range; the
+     gradient's own transparent edges handle the fade in/out, no separate
+     opacity keyframes needed. Only a brief breather at each end keeps it
+     reading as discrete passes rather than a nonstop scroll. */
+  @keyframes box-shimmer-sweep {
+    0%, 6% { transform: translateX(-80%); }
+    94%, 100% { transform: translateX(80%); }
+  }
+
+  /* One-shot intro for an ordinary Daily Foundations completion: a still
+     bloom of light (no travel, no shimmer) plus a centered message. Motion
+     is reserved for the perfect-week milestone below, matching how the app
+     saves shimmer/sweep animation for genuine milestones elsewhere. */
+  #foundations-intro {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+  }
+  #foundations-intro.show {
+    animation: fx-intro-fade 1.8s ease forwards;
+  }
+  #foundations-intro .fx-bloom {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 42%, var(--gold-bg) 0%, transparent 62%);
+    opacity: 0;
+  }
+  #foundations-intro.show .fx-bloom {
+    animation: fx-bloom-pulse 1.8s ease forwards;
+  }
+  #foundations-intro .fx-msg {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 21px;
+    color: var(--ink);
+    background: var(--card);
+    border: 1px solid var(--line);
+    padding: 14px 24px;
+    border-radius: 16px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.22);
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  #foundations-intro.show .fx-msg {
+    animation: fx-msg-pop 1.8s ease forwards;
+  }
+  @keyframes fx-intro-fade {
+    0% { opacity: 1; }
+    70% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  @keyframes fx-bloom-pulse {
+    0% { opacity: 0; }
+    35% { opacity: 1; }
+    70% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  @keyframes fx-msg-pop {
+    0% { opacity: 0; transform: translateY(8px) scale(0.96); }
+    18% { opacity: 1; transform: translateY(0) scale(1); }
+    70% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  }
+
+  /* One-shot intro for a perfect week (Saturday, 7-day streak): the app's
+     real "prestige" treatment — a two-tone sweep plus the star emblem
+     bursting into its resting corner spot, shimmer already running. This is
+     the only place full-screen motion happens; it's reserved for a genuine
+     milestone the same way the Star Board reserves its shimmer sweep. */
+  #foundations-intro.week .fx-bloom {
+    background: linear-gradient(115deg, transparent 40%, var(--gold-bg) 48%, var(--rose-bg) 56%, transparent 64%);
+    transform: translateX(-120%);
+    opacity: 1;
+  }
+  #foundations-intro.week.show .fx-bloom {
+    animation: fx-week-sweep 1.15s ease forwards;
+  }
+  #foundations-intro.week .fx-msg { color: var(--rose); }
+  @keyframes fx-week-sweep {
+    0% { transform: translateX(-120%); opacity: 1; }
+    85% { transform: translateX(120%); opacity: 1; }
+    100% { transform: translateX(120%); opacity: 0; }
+  }
+
+  /* Persistent corner star: the actual reward-scale step-up from an
+     ordinary daily completion. Only appears for the rest of a Saturday
+     that also closed out a perfect week; carries the app's own prestige
+     shimmer motif (see achievements.html's emblemSVG) rather than a
+     louder version of the daily glow. */
+  #foundations-week-badge {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 41;
+    pointer-events: none;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: opacity 0.45s ease, transform 0.45s cubic-bezier(.34,1.56,.64,1);
+    filter: drop-shadow(0 4px 14px rgba(180,99,111,0.35));
+  }
+  #foundations-week-badge.show {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .week-emblem-shimmer-bar {
+    animation: week-emblem-shimmer-sweep 3.2s ease-in-out infinite;
+  }
+  @keyframes week-emblem-shimmer-sweep {
+    0% { transform: translateX(-10px); opacity: 0; }
+    8% { opacity: 0.65; }
+    28% { transform: translateX(58px); opacity: 0.65; }
+    40%, 100% { transform: translateX(70px); opacity: 0; }
+  }
 </style>
 </head>
 <body style="margin:0;">
@@ -338,7 +555,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
 <script src="auth.js?v=2"></script>
 <script src="visits.js?v=1"></script>
-<script src="achievements.js?v=5" defer></script>
+<script src="achievements.js?v=6" defer></script>
 <div id="app"></div>
 
 <script>
@@ -460,6 +677,7 @@ document.addEventListener('DOMContentLoaded', function () {
     weekKey: wk,
     daily: {},
     zoneDone: false,
+    perfectWeekAchieved: false,
     pet: { count: 0 },
     rotisserie: buildFreshRotisserie()
   };
@@ -489,7 +707,8 @@ document.addEventListener('DOMContentLoaded', function () {
     let changed = false;
     const todayNow = currentToday();
     const wkNow = currentWeekKey();
-    if (s.date !== todayNow) { s.date = todayNow; s.daily = {}; s.zoneDone = false; changed = true; }
+    if (s.date !== todayNow) { s.date = todayNow; s.daily = {}; s.zoneDone = false; s.perfectWeekAchieved = false; changed = true; }
+    if (typeof s.perfectWeekAchieved !== 'boolean') { s.perfectWeekAchieved = false; changed = true; }
     if (s.weekKey !== wkNow) {
       s.weekKey = wkNow;
       if (!s.pet) s.pet = { count: 0 };
@@ -585,6 +804,143 @@ document.addEventListener('DOMContentLoaded', function () {
       : `<svg width="15" height="15" viewBox="0 0 16 16"><path d="M13.5 9.5A6 6 0 1 1 6.5 2.5A5 5 0 0 0 13.5 9.5Z" fill="currentColor"/></svg>`;
   }
 
+  // Faceted star emblem for the perfect-week corner badge, built with the
+  // same silhouette-clipped shimmer technique as achievements.html's
+  // prestige emblem, so the "big win" state visibly borrows the app's own
+  // milestone marker instead of inventing a new one.
+  function weekEmblemSVG(size) {
+    const cx = 32, cy = 32, points = 7, outer = 17, inner = outer * 0.44;
+    const rot = -90 * Math.PI / 180;
+    function starPath(outerR, innerR) {
+      const step = Math.PI / points;
+      let d = '';
+      for (let i = 0; i < points * 2; i++) {
+        const r = i % 2 === 0 ? outerR : innerR;
+        const a = rot + i * step;
+        d += (i === 0 ? 'M' : 'L') + (cx + r * Math.cos(a)).toFixed(2) + ' ' + (cy + r * Math.sin(a)).toFixed(2) + ' ';
+      }
+      return d + 'Z';
+    }
+    const body = starPath(outer, inner);
+    const innerStar = starPath(outer * 0.62, inner * 0.62);
+    let rays = '';
+    for (let i = 0; i < 10; i++) {
+      const a = (-90 + (360 / 10) * i) * Math.PI / 180;
+      const x1 = cx + 22 * Math.cos(a), y1 = cy + 22 * Math.sin(a);
+      const x2 = cx + 29 * Math.cos(a), y2 = cy + 29 * Math.sin(a);
+      rays += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#B4636F" stroke-width="1.6" stroke-linecap="round" opacity="0.8"/>`;
+    }
+    return `<svg width="${size}" height="${size}" viewBox="0 0 64 64">
+      <defs>
+        <radialGradient id="weekEmblemGrad" cx="42%" cy="34%" r="72%">
+          <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.9"/>
+          <stop offset="34%" stop-color="#F0C25A"/>
+          <stop offset="100%" stop-color="#B4636F"/>
+        </radialGradient>
+        <clipPath id="weekEmblemClip"><path d="${body}"/></clipPath>
+      </defs>
+      ${rays}
+      <circle cx="32" cy="32" r="19.5" fill="none" stroke="#B4636F" stroke-width="1.6" opacity="0.6"/>
+      <path d="${body}" fill="url(#weekEmblemGrad)" stroke="#B4636F" stroke-width="1.6" stroke-linejoin="round"/>
+      <g clip-path="url(#weekEmblemClip)">
+        <g transform="rotate(24 32 32)">
+          <rect x="-26" y="-14" width="14" height="92" fill="#FFF6D6" class="week-emblem-shimmer-bar"/>
+        </g>
+      </g>
+      <path d="${innerStar}" fill="#FFFFFF" opacity="0.28"/>
+    </svg>`;
+  }
+
+  // One-shot celebration on the click that completes all Daily Foundations.
+  // A plain day is a still bloom — no motion, matching how the app treats
+  // an ordinary tier-up. A perfect week gets the app's real "prestige"
+  // treatment: a two-tone sweep, and the star badge bursts into its corner.
+  // Fires again if a task gets unchecked and rechecked the same day, which
+  // is fine — that's a genuine second "completing click".
+  function playFoundationsEffect(isPerfectWeek) {
+    let intro = document.getElementById('foundations-intro');
+    if (!intro) {
+      intro = document.createElement('div');
+      intro.id = 'foundations-intro';
+      intro.innerHTML = '<div class="fx-bloom"></div><div class="fx-msg"></div>';
+      document.body.appendChild(intro);
+    }
+    intro.querySelector('.fx-msg').textContent = isPerfectWeek ? 'Perfect week' : 'Foundations complete';
+    intro.classList.remove('show', 'week');
+    void intro.offsetWidth; // restart animation if it's still mid-fade
+    intro.classList.add('show');
+    if (isPerfectWeek) {
+      intro.classList.add('week');
+      showWeekBadge();
+    }
+    clearTimeout(playFoundationsEffect._t);
+    playFoundationsEffect._t = setTimeout(() => intro.classList.remove('show', 'week'), 1800);
+  }
+
+  function showWeekBadge() {
+    let badge = document.getElementById('foundations-week-badge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.id = 'foundations-week-badge';
+      badge.innerHTML = weekEmblemSVG(52);
+      document.body.appendChild(badge);
+    }
+    requestAnimationFrame(() => badge.classList.add('show'));
+  }
+
+  // Persistent tint that stays up for the rest of the day once all Daily
+  // Foundations are done, plus the corner star badge for the rest of a
+  // Saturday that also closed out a perfect week. Purely derived from
+  // `state` on every render — no separate "is it showing" flag to drift.
+  // The box shimmer's CSS animation-duration, mirrored here so its
+  // animation-delay can be computed from wall-clock time instead of from
+  // when a box's DOM node happened to be created. app.innerHTML rebuilds
+  // every render (even for clicks on unrelated boxes), which would
+  // otherwise restart each box's sweep from zero and let boxes drift out
+  // of phase with each other.
+  const FX_GLOW_DURATION = 4;
+  const FX_GLOW_WEEK_DURATION = 2.8;
+  function syncedAnimationDelay(durationSec) {
+    return '-' + ((Date.now() / 1000) % durationSec).toFixed(3) + 's';
+  }
+
+  function renderFoundationsFx() {
+    let fx = document.getElementById('foundations-fx');
+    if (!fx) {
+      fx = document.createElement('div');
+      fx.id = 'foundations-fx';
+      fx.innerHTML = '<div class="fx-tint"></div><div class="fx-border"></div>';
+      document.body.appendChild(fx);
+    }
+    const allDone = state.date === currentToday() && DAILY_TASKS.every(t => state.daily[t.id]);
+    const weekDone = allDone && state.perfectWeekAchieved;
+    fx.classList.toggle('active', allDone);
+    fx.classList.toggle('week', !!weekDone);
+
+    // app.innerHTML is rebuilt fresh every render, so section elements
+    // never carry stale fx-glow classes in from a previous render.
+    if (weekDone) {
+      const delay = syncedAnimationDelay(FX_GLOW_WEEK_DURATION);
+      app.querySelectorAll('.section').forEach(sec => {
+        sec.classList.add('fx-glow-week');
+        sec.style.setProperty('--fx-delay', delay);
+      });
+    } else if (allDone) {
+      const dailyBox = app.querySelector('.section.daily-box');
+      if (dailyBox) {
+        dailyBox.classList.add('fx-glow');
+        dailyBox.style.setProperty('--fx-delay', syncedAnimationDelay(FX_GLOW_DURATION));
+      }
+    }
+
+    const badge = document.getElementById('foundations-week-badge');
+    if (weekDone) {
+      showWeekBadge();
+    } else if (badge) {
+      badge.classList.remove('show');
+    }
+  }
+
   function render() {
     const frac = dailyFraction();
     const nowLive = new Date();
@@ -621,7 +977,7 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>`;
 
     // Daily foundations
-    html += `<div class="section">
+    html += `<div class="section daily-box">
       <div class="eyebrow">Daily Foundations</div>
       <h2>Keep the boat afloat</h2>`;
     DAILY_TASKS.forEach(t => {
@@ -673,6 +1029,7 @@ document.addEventListener('DOMContentLoaded', function () {
     html += `<div style="height:56px;"></div>`;
 
     app.innerHTML = html;
+    renderFoundationsFx();
 
     // Bind events
 
@@ -682,7 +1039,10 @@ document.addEventListener('DOMContentLoaded', function () {
         state.daily[id] = !state.daily[id];
         if (window.recordAchievement) recordAchievement('daily:' + id, state.daily[id] ? 1 : -1);
         if (state.daily[id] && DAILY_TASKS.every(t => state.daily[t.id]) && window.recordPerfectDay) {
-          recordPerfectDay(currentToday());
+          const streakResult = await recordPerfectDay(currentToday());
+          const isPerfectWeek = new Date().getDay() === 6 && !!streakResult && streakResult.current >= 7;
+          if (isPerfectWeek) state.perfectWeekAchieved = true;
+          playFoundationsEffect(isPerfectWeek);
         }
         await save();
         render();
