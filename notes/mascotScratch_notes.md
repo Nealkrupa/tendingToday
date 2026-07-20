@@ -1,13 +1,14 @@
 # Mascot Cosmetics & Unlocks — Working Notes
 
 Scratch doc for cosmetic systems layered on top of the shipped mascot
-(life stage, skills/tokens, hats, skin-color tiers — all documented in
-[petDesign_notes.md](petDesign_notes.md)). This is where new unlock
+(life stage, skills/tokens, hats, skin-color tiers — current shape in
+[mascotSpec_notes.md](mascotSpec_notes.md), full rationale/history in
+[mascotHistory_notes.md](mascotHistory_notes.md)). This is where new unlock
 ideas get roughed out before they turn into real spec/implementation,
-same "resolved vs. still open" split that doc already uses. Two of the
+same "resolved vs. still open" split those docs already use. Two of the
 proposals below have since actually shipped — the body base/trim split
 and the title-rendering system that replaced skill hats' worn-image
-rendering. Both real implementation records live in petDesign_notes.md
+rendering. Both real implementation records live in mascotHistory_notes.md
 ("Body art split into base + trim layers (shipped)" and "Title
 rendering system (shipped)"), not here; this doc keeps only short
 pointers to them. Buyable bodies and buyable hats are still unbuilt —
@@ -21,18 +22,18 @@ pointers to them. Buyable bodies and buyable hats are still unbuilt —
   trim is grayscale and tinted live via canvas multiply (`getTintedImage`)
   using the pet's chosen skin color. Shipped for real across all 4
   stages (Champion currently renders with an empty placeholder trim
-  pending real two-layer art — see petDesign_notes.md). One fixed art
+  pending real two-layer art — see mascotSpec_notes.md). One fixed art
   set — no alternate body designs (eggs) exist yet.
 - **Titles**: skill-level unlocks (25/50/75/90/99, plus completionist)
   render as a colored/shimmer title next to the pet's name
-  (`equippedTitle`), not a worn hat image — see petDesign_notes.md's
+  (`equippedTitle`), not a worn hat image — see mascotHistory_notes.md's
   "Title rendering system (shipped)". The old base+trim hat-image
   pipeline (`resolveHat`, hat anchors, hat PNGs) still exists in
   `mascot.js` untouched, just dormant — reserved for the still-unbuilt
   buyable-hats proposal below, which will write to the separate
   `equippedHat` field instead. Tokens only buy skin colors and AFK
   blocks today (`PREMIUM_SWATCHES` / AFK-block table in
-  petDesign_notes.md) — nothing is purchasable yet.
+  mascotSpec_notes.md) — nothing is purchasable yet.
 - **Anchoring**: every asset (body, hat base/trim, prop) shares one
   fixed 64×64 canvas and origin. Hats/props position via a per-stage
   head/hand anchor point, translated against the asset's own fixed
@@ -49,7 +50,7 @@ cosmetic should recolor through the existing `getTintedImage(srcUrl, color)`
 in `mascot.js`, not a new ad hoc canvas/tinting path. That function already
 persists every computed tint to `localStorage` (keyed purely on
 `srcUrl|color`, with no notion of what kind of asset it's for — see
-petDesign_notes.md's "Tints persisted to localStorage" section) so any
+mascotHistory_notes.md's "Tints persisted to localStorage" section) so any
 future body set, hat, or other recolorable art gets the once-ever-per-
 browser caching for free. A parallel tinting path would silently lose that
 and reintroduce the exact page-load-stall/flash problems that function was
@@ -78,8 +79,8 @@ buyable hats are a separate, parallel unlock track ("what did you
 spend tokens on").
 
 **Now the sole consumer of the image-hat pipeline — shipped, see
-petDesign_notes.md.** Skill hats stopped rendering as a worn image (see
-"Title rendering system (shipped)" in petDesign_notes.md); `hatHtml`/
+mascotHistory_notes.md.** Skill hats stopped rendering as a worn image (see
+"Title rendering system (shipped)" in mascotHistory_notes.md); `hatHtml`/
 `resolveHat()`/the hat anchor constants/the hat entries in
 `ALL_ASSET_FILES` and `precomputeHatTints` all stayed in `mascot.js`
 exactly as they were — they're just dormant now, waiting for this
@@ -98,7 +99,7 @@ for completionist's `Pinnacle`. `equippedHat` split into `equippedTitle`
 A custom pet display name (`petName`, editable on the customize page,
 defaulting to the signed-in user's own name) shipped alongside it, so a
 title reads as "🐟 Ace-Angler Nibbles" rather than prefixing a person's
-name. See petDesign_notes.md's **"Title rendering system (shipped)"**
+name. See mascotHistory_notes.md's **"Title rendering system (shipped)"**
 section for the full implementation record (the locked color/title
 tables, the `titleTextStyle()` shimmer technique, the devtools updates,
 and verification) — kept there rather than duplicated here, per this
@@ -110,7 +111,7 @@ doc's own intro note.
 base + trim two-layer construction hats already used: base is fixed-
 color and never recolored, trim is grayscale and takes the pet's skin
 color, mirroring exactly the `renderSprite` base + trim stacking hats
-already had. See petDesign_notes.md's **"Body art split into base +
+already had. See mascotHistory_notes.md's **"Body art split into base +
 trim layers (shipped)"** section for the actual implementation record
 (art findings, migration of Champion's placeholder trim, the `mascot.js`
 changes, `ASSET_VERSION` bump, and devtools verification) — kept there
@@ -157,7 +158,7 @@ rather than duplicated here, per this doc's own intro note.
   split):** `pets.<user>.purchasedHats: [...]` alongside the existing
   `purchasedSkinColors`; `equippedHat` refers only to that pool (the
   title system's shipped `equippedTitle`/`equippedHat` split — see
-  petDesign_notes.md — already carved skill-tier ids out of this field,
+  mascotHistory_notes.md — already carved skill-tier ids out of this field,
   so no further data-model change is needed here when buyable hats
   actually ship).
 - **Stored art assets stay a fixed 64×64 canvas, always** — no
@@ -178,10 +179,10 @@ behind that specific stage's frame in an art tool as its own overlay
 layer, matching the `pet-body-{stage}-{frame}-{layer}.png` per-stage
 file split the actual body art already uses:
 
-- [`template-fresh.png`](template-fresh.png)
-- [`template-in-training.png`](template-in-training.png)
-- [`template-rookie.png`](template-rookie.png)
-- [`template-champion.png`](template-champion.png)
+- [`template-fresh.png`](../pet-assets/template-fresh.png)
+- [`template-in-training.png`](../pet-assets/template-in-training.png)
+- [`template-rookie.png`](../pet-assets/template-rookie.png)
+- [`template-champion.png`](../pet-assets/template-champion.png)
 
 Each marks that one stage's head/hand anchor, pulled directly from
 `STAGES` in `mascot.js:139-144`, so a new egg's stage art can land its
@@ -228,16 +229,16 @@ per-egg offset tuning needed at render time).
 Two more 64×64 transparent reference images, this time for the
 attachment point *within a hat or prop's own canvas* (as opposed to the
 body-side head/hand anchors above) — where that asset's own "grab
-point" sits, per the art spec in `petDesign_notes.md`.
+point" sits, per the art spec in `mascotSpec_notes.md`.
 
-- [`template-hat.png`](template-hat.png) — a single amethyst plus at
+- [`template-hat.png`](../pet-assets/template-hat.png) — a single amethyst plus at
   (31, 46), `HAT_ANCHOR_STANDARD`/`HAT_ANCHOR_COMPLETIONIST` in
   `mascot.js:152-157`. Only one marker because every hat — standard,
   max-skill, and completionist alike — is drawn against this same
   shared attachment pixel; there's no per-hat-type variant to
   distinguish. Reusable as a reference overlay for any new buyable
   hat's base/trim layers too, since those follow the same construction.
-- [`template-prop.png`](template-prop.png) — three markers, one per
+- [`template-prop.png`](../pet-assets/template-prop.png) — three markers, one per
   skill, from `PROP_ANCHORS` in `mascot.js:158-162`: woodcutting (bark
   brown, 33, 46), gardening (leaf green, 36, 54), fishing (water blue,
   48, 48).
@@ -256,7 +257,7 @@ point" sits, per the art spec in `petDesign_notes.md`.
 ## Asset file naming
 
 Extends the existing kebab-case, category-prefix-first convention from
-`petDesign_notes.md`'s own "Asset file naming" section — same
+`mascotSpec_notes.md`'s own "Asset naming" section — same
 `pet-assets/` folder, same prefix-groups-files-together logic.
 
 ### Bodies — existing convention gained a `-{layer}` suffix — shipped
@@ -270,7 +271,7 @@ e.g. `pet-body-fresh-1-base.png`, `pet-body-fresh-1-trim.png`,
 `pet-body-fresh-2-base.png`, `pet-body-fresh-2-trim.png`, and the same
 four-file pattern for `in-training`, `rookie`, `champion` — 16 files
 total, replacing the previous 8 single-layer ones (deleted via `git rm`
-once every stage had a `-base`/`-trim` pair). See petDesign_notes.md's
+once every stage had a `-base`/`-trim` pair). See mascotHistory_notes.md's
 "Body art split into base + trim layers (shipped)" for the actual
 migration record, including Champion's placeholder-trim interim state.
 
@@ -283,7 +284,7 @@ still sorts together under one prefix. `eggId` is a kebab-case
 descriptive slug (e.g. `forest`, `shadow`) — it also doubles as the id
 stored in `purchasedBodies`/`equippedBody`, so treat it as stable once
 shipped; renaming it later needs a data migration, the same caution
-already flagged for other shared identifiers in `petDesign_notes.md`.
+already flagged for other shared identifiers in `mascotHistory_notes.md`.
 
 Example, one egg ("forest") — 16 files, same count/shape as the
 default body's own post-split 16: `pet-body-forest-fresh-1-base.png`,
@@ -330,7 +331,7 @@ cosmetic asset themselves.
 ## Open questions
 
 None currently. The body base/trim split and the title-rendering system
-have both shipped (see petDesign_notes.md). Buyable bodies and buyable
+have both shipped (see mascotHistory_notes.md). Buyable bodies and buyable
 hats — the two remaining proposals — have no open questions left either;
 every question raised while roughing them out already has a resolved
 answer in "Locked in." Next step for each is execution-level: real

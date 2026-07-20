@@ -1,9 +1,10 @@
 // Household mascot widget — a persistent pixel-art pet per household member,
 // living at the bottom of every page the same way priority-alert.js lives at
 // the top. Fully self-contained: injects its own <style> and DOM, no page
-// markup changes needed. See pet-assets/petDesign_notes.md for the full
-// design spec this file implements ("Progression system redesign" section
-// for the shape below specifically).
+// markup changes needed. See notes/mascotSpec_notes.md for the current
+// spec this file implements, or notes/mascotHistory_notes.md for the
+// full design rationale ("Progression system redesign" section for the
+// shape below specifically).
 //
 // Two independent progression axes, both pure derivations off the same
 // household/achievements-state.counts total that already powers the Star
@@ -15,7 +16,7 @@
 //      happens (tiered by action type), detected by diffing consecutive
 //      achievements-state snapshots against a per-pet cursor — not by an
 //      hours-based idle bank (that system had a real bug: see
-//      petDesign_notes.md's redesign section for why it was replaced).
+//      mascotHistory_notes.md's redesign section for why it was replaced).
 //      A separate, uncapped token currency (1 action = 1 token) is spendable
 //      on purchasable AFK-time blocks and cosmetic skin colors.
 //
@@ -56,7 +57,7 @@
   const SWATCH_COLORS = ['#7C9075', '#5B7B9A', '#B4636F', '#C08A2E'];
   const RAINBOW_SKIN = 'rainbow';
   // Purchasable skin colors, priced/flaired in three escalating tiers (see
-  // petDesign_notes.md's color-tier section for the full rationale): Common
+  // mascotHistory_notes.md's color-tier section for the full rationale): Common
   // reuses two more of the site's own page accents with no extra flair,
   // Uncommon adds a subtle pulse glow, Rare adds a shimmer glow, and the
   // peak Rare-priced Rainbow entry smooth-cycles through hues (same
@@ -84,7 +85,7 @@
   // ---------------------------------------------------------------------
   // Skill hat unlocks no longer render as a worn image — they render as an
   // ascending title next to the pet's name instead (see
-  // petCosmetics_notes.md's "Skill hat unlocks become ascending titles").
+  // mascotScratch_notes.md's "Skill hat unlocks become ascending titles").
   // The image-hat pipeline below (resolveHat, hatHtml in renderSprite,
   // hat anchors, ALL_ASSET_FILES' hat entries, precomputeHatTints) is kept
   // exactly as-is, not deleted — it's earmarked for the still-unbuilt
@@ -105,7 +106,7 @@
     fishing: { 25: '#6B8299', 50: '#4A7BA6', 75: '#2E6DB4', 90: '#1E7FD1', max: '#0EA5E9' }
   };
   // Ascending title word per skill/tier — content locked in
-  // petCosmetics_notes.md. Deliberately mixes single words and hyphenated
+  // mascotScratch_notes.md. Deliberately mixes single words and hyphenated
   // compounds at every rung, not just low tiers.
   const TITLE_WORDS = {
     woodcutting: { 25: 'Chopper', 50: 'Splitter', 75: 'Feller', 90: 'Timber-Titan', max: 'Lumberjack' },
@@ -203,7 +204,7 @@
   }
 
   // ---------------------------------------------------------------------
-  // Progression redesign constants — see petDesign_notes.md's "Progression
+  // Progression redesign constants — see mascotHistory_notes.md's "Progression
   // system redesign" section for the full reasoning behind these numbers.
   // ---------------------------------------------------------------------
   // XP granted per tracked action, by tier. Every recordAchievement() key
@@ -429,7 +430,7 @@
         const mascotData = mascotSnap.exists ? mascotSnap.data() : {};
 
         // Life stage: lazy monthly rollover, first-writer-wins. Unrelated to
-        // the skill/token redesign below — see petDesign_notes.md's note on
+        // the skill/token redesign below — see mascotHistory_notes.md's note on
         // why only the body axis is monthly-scoped.
         const monthKey = currentMonthKey();
         let baselineTotal = typeof mascotData.baselineTotal === 'number' ? mascotData.baselineTotal : liveTotal;
@@ -443,7 +444,7 @@
         // presence of hoursAlreadyGranted — no pet created under this
         // redesign ever has that field. Full reset, not a conversion: the
         // mascot feature is still WIP, so there's no old progress worth
-        // preserving here (see petDesign_notes.md's migration note).
+        // preserving here (see mascotHistory_notes.md's migration note).
         const isLegacyPet = !isNewPet && typeof existingRaw.hoursAlreadyGranted === 'number';
         const pet = Object.assign(defaultPet(petKey), existingRaw || {});
 
@@ -487,7 +488,7 @@
           if (unlockedTitleIds.indexOf(pet.equippedTitle) === -1) pet.equippedTitle = null;
         }
         // equippedHat is cleared unconditionally for now: the buyable-hat
-        // catalog it's reserved for (petCosmetics_notes.md) hasn't shipped,
+        // catalog it's reserved for (mascotScratch_notes.md) hasn't shipped,
         // so nothing is currently a valid value — any stored value today is
         // leftover data from before titles/hats split. Replace this with a
         // real catalog check once buyable hats exist.
@@ -631,7 +632,7 @@
 
   // Spends tokens on an AFK-time block — same transactional shape as
   // purchaseSkinColor. No-ops if a block's already active (the block itself
-  // is the only limiter — see petDesign_notes.md) or tokens fall short.
+  // is the only limiter — see mascotHistory_notes.md) or tokens fall short.
   async function purchaseAfkBlock(petKey, blockIndex) {
     const block = TOKEN_BLOCKS[blockIndex];
     if (!block) return;
@@ -1972,6 +1973,12 @@
         slot.className = 'mascot-slot';
         slot.type = 'button';
         slot.style.left = motion.x + 'px';
+        // Both slots share one paint order (PET_KEYS' fixed, viewer-
+        // independent order) by default, so on someone else's device the
+        // *other* pet would always win when they cross. Bumping the
+        // viewer's own pet above the other one here means "your pet is on
+        // top" is true from wherever it's being looked at.
+        slot.style.zIndex = key === widgetState.myPetKey ? '1' : '0';
         slot.innerHTML = `<span class="mascot-slot-name"></span><div class="mascot-sprite-box" id="mascot-sprite-${key}"></div>`;
         slot.addEventListener('click', () => {
           widgetState.expandedPet = widgetState.expandedPet === key ? null : key;

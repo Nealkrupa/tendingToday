@@ -559,7 +559,7 @@ page since its live counts never arrived.
   customization slot for free**: the cache doesn't know or care what kind
   of asset it's tinting, only the `(srcUrl, color)` pair, so a future
   buyable-body set, tool skins, or any other tintable cosmetic (see
-  `pet-assets/petCosmetics_notes.md`'s open ideas) gets the same
+  `notes/mascotScratch_notes.md`'s open ideas) gets the same
   once-ever-per-browser caching automatically, as long as it's rendered
   through `getTintedImage()` rather than a new ad hoc path.
 - **Two pets, one household:** both pets earn skill XP and tokens
@@ -678,7 +678,14 @@ page since its live counts never arrived.
   popups (`showXpPopup`/`showTokenPopup`) spawn from that same name
   label's live bounding rect rather than the sprite's, so they always
   clear the label — including a stacked one — before floating upward,
-  instead of rising up through the text. Separately, a
+  instead of rising up through the text.
+  When two sprites overlap, the viewer's own pet always paints on top —
+  `PET_KEYS` (and so DOM/paint order) is the same fixed `['userA',
+  'userB']` on every device, so without this the same pet would always win
+  regardless of who's looking. Each slot's `z-index` is set once at
+  creation to `1` for `key === widgetState.myPetKey` and `0` otherwise, so
+  "on top" follows the viewer rather than being a global, device-
+  independent ordering. Separately, a
   debounced `resize` listener re-clamps any pet whose `x` has fallen
   outside the ground's current walkable width (e.g. after a mobile
   orientation change or address-bar collapse/expand) — without it, a pet
@@ -692,8 +699,10 @@ page since its live counts never arrived.
   write contention off a document every other page already transacts
   against constantly.
 
-Full design rationale (thresholds, XP curve math, art spec, asset naming)
-lives in `pet-assets/petDesign_notes.md`.
+Current spec (thresholds, data model, art spec, asset naming) lives in
+`notes/mascotSpec_notes.md`; the full design rationale/history (why
+each number is what it is, bugs found and fixed, XP curve math) lives in
+`notes/mascotHistory_notes.md`.
 
 ## Dark mode
 
@@ -976,7 +985,7 @@ everything *looks* like it worked.
 The same problem applies to the `pet-assets/*.png` files `mascot.js` loads,
 since the filename itself never changes when the art does. Those go through
 a separate `ASSET_VERSION` constant near the top of `mascot.js` (currently
-`'v=6'`) rather than a `<script>` tag's query string — every `assetUrl()`
+`'v=7'`) rather than a `<script>` tag's query string — every `assetUrl()`
 call appends it automatically. **Whenever any pet-assets PNG is replaced in
 place, bump `ASSET_VERSION`** (and, since that's an edit to `mascot.js`
 itself, bump its own script-tag version too, per the rule above).

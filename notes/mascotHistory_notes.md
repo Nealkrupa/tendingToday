@@ -1,4 +1,12 @@
-# Household Mascot — Design Notes (shipped)
+# Household Mascot — Design History
+
+**For current behavior/data model, see [mascotSpec_notes.md](mascotSpec_notes.md).**
+This file is the chronological design/rationale record — why each system is
+shaped the way it is, what was tried and rejected, bugs found in production
+and how they were fixed, real usage data pulled to calibrate numbers. Nothing
+here is deleted when a later section supersedes it (see the `> **Superseded**`
+callouts throughout) — treat this as project history, not a live spec. Split
+out from a single combined doc on 2026-07-20; no content changed in the split.
 
 A persistent widget-level pet, separate from the existing "pet upkeep" feature on
 Tending Today (`pet:brush`). Lives at the bottom of the screen on every household
@@ -162,7 +170,7 @@ elapsed time since last visit, fueled by an AFK-hour bank.
 > pipeline described here (base+trim hats, tier-tinted trim, shimmer on
 > max/completionist) still exists in `mascot.js`, just repointed at a
 > still-unbuilt **purchasable cosmetic hats** feature instead — see
-> `pet-assets/petCosmetics_notes.md`. "Active skill item" (the prop) below
+> `notes/mascotScratch_notes.md`. "Active skill item" (the prop) below
 > is unaffected by any of this.
 
 Combination of two unlock types, both permanent once earned (skills never
@@ -389,7 +397,7 @@ no dedicated page needed for this either.
   [mascot.js:46](../mascot.js), 🪓/🪴/🐟), also reused for the XP popup
   and the skill-detail panel header. Prop PNGs render only as the
   in-sprite held-tool overlay now, never at icon size — see
-  [petCosmetics_notes.md](petCosmetics_notes.md)'s "Icon use for art
+  [mascotScratch_notes.md](mascotScratch_notes.md)'s "Icon use for art
   assets that double as icons" for the current icon approach. This level
   also shows the pet's currently banked AFK hours, once, above/alongside
   the pill row — it's a pet-level resource (fuels whichever skill is
@@ -1432,13 +1440,13 @@ to never flash at all (everything was pre-warmed).
   caching path anywhere in `mascot.js`. The cache key is purely
   `(srcUrl, color)`, with no notion of *what kind* of cosmetic it's for, so
   any future tintable customization slot — a buyable-body set, tool skins,
-  anything else from `pet-assets/petCosmetics_notes.md`'s open ideas —
+  anything else from `notes/mascotScratch_notes.md`'s open ideas —
   gets this same once-ever-per-browser persistence for free, provided it's
   rendered through `getTintedImage()` rather than a new ad hoc path.
 
 ## Body art split into base + trim layers (shipped)
 
-First of the three proposals from `pet-assets/petCosmetics_notes.md` to
+First of the three proposals from `notes/mascotScratch_notes.md` to
 actually ship. The body now uses the same two-layer construction hats have
 always used — **base** (fixed-color, never recolored) underneath, **trim**
 (grayscale, tinted to the pet's chosen skin color) on top — instead of one
@@ -1457,7 +1465,7 @@ single grayscale layer tinted as a whole.
   construction the Art Spec section above already established for hats,
   just applied to the body for the first time.
 - **Champion had no split art yet at ship time.** Per the migration
-  decision already locked in `petCosmetics_notes.md`, its old single-layer
+  decision already locked in `mascotScratch_notes.md`, its old single-layer
   `pet-body-champion-1.png`/`-2.png` were reissued as `-base.png` (a
   straight copy, so Champion looks identical to before) with a brand-new,
   fully transparent `-trim.png` sibling — not kept on a separate legacy
@@ -1474,7 +1482,7 @@ single grayscale layer tinted as a whole.
 - **Naming: `pet-body-{stage}-{frame}-{layer}.png`, `layer` = `base` |
   `trim`** — 16 files total (4 stages × 2 frames × 2 layers), replacing
   the previous 8. Matches the convention already proposed for buyable
-  "egg" bodies in `petCosmetics_notes.md` (`pet-body-{eggId}-{stage}-
+  "egg" bodies in `mascotScratch_notes.md` (`pet-body-{eggId}-{stage}-
   {frame}-{layer}.png`), just without an `eggId` segment for the default
   body ("egg #0").
 - **`renderSprite` restructured to mirror the hat block exactly**
@@ -1511,13 +1519,13 @@ single grayscale layer tinted as a whole.
 
 ## Title rendering system (shipped)
 
-Second of the three proposals from `pet-assets/petCosmetics_notes.md` to
+Second of the three proposals from `notes/mascotScratch_notes.md` to
 actually ship. Skill-tier unlocks (levels 25/50/75/90/99, plus
 completionist) no longer render as a worn hat image — they render as a
 WoW-style title next to the pet's name instead. Full design rationale
 (color-per-skill/tier table, the 16 title strings, why `Triple-Crown` got
 rejected for `Pinnacle`, the `background-clip: text` shimmer decision)
-lives in `pet-assets/petCosmetics_notes.md`; this section is the
+lives in `notes/mascotScratch_notes.md`; this section is the
 implementation record.
 
 - **`equippedHat` split into two independent fields.** `equippedTitle`
@@ -1610,3 +1618,60 @@ bumped to `v=50` on every page that loads it (`home.html`,
 course alongside this session's `mascot.js` changes, even though no
 `pet-assets/*.png` files themselves changed this time (the title system
 is pure text/CSS, no new art).
+
+## Post-title-system fixes & art update (shipped)
+
+Several smaller follow-ups landed across a handful of sessions after the
+title system above, none big enough to warrant their own top-level section.
+The interaction-level fixes are already described in full in `notes.md`'s
+mascot section (name-label stacking, XP/token popup anchoring, the
+confirm-before-spend prompts) — this entry exists mainly to keep the
+`ASSET_VERSION`/script-tag trail unbroken, since that's the one thing this
+doc tracks that `notes.md` doesn't.
+
+- **Rookie body art re-touched** (`pet-body-rookie-1-trim.png`,
+  `pet-body-rookie-2-base.png`, `pet-body-rookie-2-trim.png`) — a real art
+  replacement, so `ASSET_VERSION` bumped `v=6` → `v=7`.
+- **Title pill background**, so a title's own color (especially the duller
+  low tiers) doesn't wash out against the sage equip button or the ground
+  art — a low-opacity `rgba` pill tinted to the title's own color sits
+  behind the badge+text (`hexToRgba()`, `.mascot-title-pill`); the
+  completionist title (no fixed `.color`, it cycles) falls back to a
+  neutral gray pill.
+- **Completionist/max-tier title shimmer loop fixed to be seamless.** The
+  gradient used to be sized to exactly one color-stop period
+  (`background-size: ${stops.length * 100}%`), but `mascot-title-shine`
+  scrolls `background-position` by a full container-width less than the
+  gradient's own span — always one period short — so the loop visibly
+  skipped on every restart. Fixed by doubling the stop list into two
+  back-to-back periods at a flat `background-size: 200%`, so the shift
+  always covers exactly one full period and lines up pixel-for-pixel with
+  the next.
+- **Stale cosmetic ids now self-clear.** `equippedTitle` is checked against
+  the pet's current unlocks on every grant (not just for new/legacy pets),
+  and reset to `null` if it no longer resolves — protects against a future
+  title-tier revamp stranding an old id. `equippedHat` is cleared
+  unconditionally for now, since the buyable-hat catalog it's reserved for
+  hasn't shipped yet and any stored value today predates the title/hat
+  split.
+- **Purchases gated behind a native `confirm()` prompt** (AFK-time blocks
+  and skin colors) right before the click handler calls
+  `purchaseAfkBlock`/`purchaseSkinColor` — the purchase functions
+  themselves are unchanged, the prompt just guards against a mis-tap
+  silently draining the token balance.
+- **Name label moved above the sprite**, XP/token "+N" popups now spawn
+  from that label's live bounding rect instead of the sprite's own (so they
+  clear the text before floating up), and `updateMascotNameStacking()` was
+  added (later corrected to key off the *sprites'* live overlap rather than
+  the labels' — see `notes.md`'s "Household mascot" section for why) so two
+  wide name/title labels don't visually brush each other while their
+  sprites are still comfortably separated.
+- **Viewer's own pet now always paints on top when two sprites cross** — a
+  per-slot `z-index` (`1` for `widgetState.myPetKey`, `0` otherwise) set
+  once at slot creation, so which pet wins the overlap follows whoever's
+  looking rather than the fixed, device-independent `PET_KEYS` DOM order.
+
+Script tag progression across these sessions: `mascot.js?v=50` → `v=57`
+(`v=52` skipped one number partway through — a couple of same-session edits
+bumped it twice before the HTML files were saved — no functional
+significance).
