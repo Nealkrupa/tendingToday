@@ -904,6 +904,9 @@
       font-weight: 700;
       color: var(--muted, #6B7568);
       font-family: 'IBM Plex Mono', monospace;
+      /* Smooths the vertical offset applied when two wandering pets' names
+         would otherwise overlap — see updateMascotNameStacking(). */
+      transition: transform 0.25s ease;
     }
     .mascot-title-pill {
       display: inline-flex;
@@ -1288,9 +1291,14 @@
   // box rather than being a child of it, since the sprite box's own
   // innerHTML is torn down and rebuilt on every idle-frame tick.
   function showXpPopup(petKey, skill, xpAmount) {
-    const spriteBox = document.getElementById('mascot-sprite-' + petKey);
-    if (!spriteBox) return;
-    const rect = spriteBox.getBoundingClientRect();
+    const slot = document.getElementById('mascot-slot-' + petKey);
+    if (!slot) return;
+    // Anchor to the name label, not the sprite — names now render above the
+    // sprite (and may be lifted further by updateMascotNameStacking), so
+    // spawning from the sprite's own top edge would have the popup rise up
+    // through the name text instead of clearing it first.
+    const nameEl = slot.querySelector('.mascot-slot-name');
+    const rect = (nameEl || slot).getBoundingClientRect();
     const layer = ensureFxLayer();
     const el = document.createElement('div');
     el.className = 'mascot-xp-popup';
@@ -1311,12 +1319,21 @@
     const ground = document.getElementById('mascot-ground');
     if (!ground) return;
     const rect = ground.getBoundingClientRect();
+    // Shared across both pets, so rather than picking one pet's name to
+    // clear, rise above whichever name is currently highest on screen
+    // (stacked or not) — falls back to the ground strip's own top when no
+    // name labels are found yet.
+    let top = rect.top;
+    PET_KEYS.forEach((key) => {
+      const nameEl = document.querySelector('#mascot-slot-' + key + ' .mascot-slot-name');
+      if (nameEl) top = Math.min(top, nameEl.getBoundingClientRect().top);
+    });
     const layer = ensureFxLayer();
     const el = document.createElement('div');
     el.className = 'mascot-xp-popup';
     el.textContent = '+' + tokens.toLocaleString() + ' ' + TOKEN_ICON;
     el.style.left = (rect.left + rect.width / 2) + 'px';
-    el.style.top = rect.top + 'px';
+    el.style.top = top + 'px';
     layer.appendChild(el);
     el.addEventListener('animationend', () => el.remove());
   }
@@ -1955,7 +1972,7 @@
         slot.className = 'mascot-slot';
         slot.type = 'button';
         slot.style.left = motion.x + 'px';
-        slot.innerHTML = `<div class="mascot-sprite-box" id="mascot-sprite-${key}"></div><span class="mascot-slot-name"></span>`;
+        slot.innerHTML = `<span class="mascot-slot-name"></span><div class="mascot-sprite-box" id="mascot-sprite-${key}"></div>`;
         slot.addEventListener('click', () => {
           widgetState.expandedPet = widgetState.expandedPet === key ? null : key;
           widgetState.expandedSkill = null;
@@ -1986,7 +2003,33 @@
       slot.querySelector('.mascot-slot-name').innerHTML = petNameHtml(key, pet);
     });
 
+    updateMascotNameStacking();
     renderPanel(pets);
+  }
+
+  // Names now render above each sprite (see slot.innerHTML above) rather
+  // than below it, so two pets wandering close together can end up with
+  // overlapping name/title labels even though their sprites themselves stay
+  // MIN_PET_SEPARATION_PX apart. Sorts pets left-to-right and lifts each
+  // name that horizontally overlaps the previous one an extra notch higher,
+  // cascading if three-plus pets ever bunch up. translateY only, so it never
+  // touches the horizontal `left` each name inherits from its slot.
+  const NAME_STACK_OFFSET_PX = 14;
+  function updateMascotNameStacking() {
+    const entries = PET_KEYS.map((key) => {
+      const slot = document.getElementById('mascot-slot-' + key);
+      const nameEl = slot && slot.querySelector('.mascot-slot-name');
+      return nameEl ? { nameEl, left: parseFloat(slot.style.left) || 0 } : null;
+    }).filter(Boolean);
+    entries.sort((a, b) => a.left - b.left);
+    let prevRect = null;
+    let level = 0;
+    entries.forEach((entry) => {
+      const rect = entry.nameEl.getBoundingClientRect();
+      level = (prevRect && rect.left < prevRect.right) ? level + 1 : 0;
+      entry.nameEl.style.transform = level ? 'translateY(-' + (NAME_STACK_OFFSET_PX * level) + 'px)' : '';
+      prevRect = rect;
+    });
   }
 
   function renderPanel(pets) {
@@ -2075,6 +2118,9 @@
         panel.querySelectorAll('.mascot-afk-btn').forEach((el) => {
           el.addEventListener('click', () => {
             const idx = parseInt(el.getAttribute('data-block'), 10);
+            const block = TOKEN_BLOCKS[idx];
+            if (!block) return;
+            if (!confirm(`Spend ${block.price} ${TOKEN_ICON} tokens on ${block.hours}h of AFK time?`)) return;
             purchaseAfkBlock(petKey, idx);
           });
         });
@@ -2337,7 +2383,9 @@
           el.addEventListener('click', () => {
             const color = el.getAttribute('data-buy-color');
             const price = parseInt(el.getAttribute('data-buy-price'), 10);
-            if (pet.__tokens >= price) purchaseSkinColor(petKey, color, price);
+            if (pet.__tokens < price) return;
+            if (!confirm(`Spend ${price} ${TOKEN_ICON} tokens to unlock this color?`)) return;
+            purchaseSkinColor(petKey, color, price);
           });
         });
         renderPreview(pet);
