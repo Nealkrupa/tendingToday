@@ -689,16 +689,18 @@ page since its live counts never arrived.
   extent, no chicken-and-egg problem. When nothing overlaps, every label
   sits at level 0 (no offset), directly under its own sprite. When labels do
   overlap, they stack vertically instead — the
-  **viewer's own pet's name always lifts to the top of the stack**
-  (`translateY(-14px)` per level via `NAME_STACK_OFFSET_PX`), regardless of
-  which side of the cluster it's actually standing on, with everyone else in
-  the cluster filling in below it in left-to-right order. This is the
-  inverse of an earlier version that stacked purely by left-to-right sprite
-  position — that made the same physical pet "jump" between top and bottom
-  of the stack depending on which side it approached from, which read as
-  arbitrary; keying off `widgetState.myPetKey` instead makes "my name is
-  always on top" a stable, viewer-relative rule, snapping back to level 0 the
-  moment the sprites clear each other. The XP/token "+N" drop
+  **viewer's own pet's name always stays at the bottom of the stack**
+  (level 0, no lift, directly under its own sprite), regardless of which
+  side of the cluster it's actually standing on, with everyone else in the
+  cluster lifted above it (`translateY(-14px)` per level via
+  `NAME_STACK_OFFSET_PX`) in left-to-right order. This is the inverse of an
+  earlier version that stacked purely by left-to-right sprite position —
+  that made the same physical pet "jump" between top and bottom of the
+  stack depending on which side it approached from, which read as
+  arbitrary; keying off `widgetState.myPetKey` instead makes "my name always
+  stays put at the bottom" a stable, viewer-relative rule, with the lift
+  (and snap-back to level 0) applying only to whichever pet *isn't* mine.
+  The XP/token "+N" drop
   popups (`showXpPopup`/`showTokenPopup`) spawn from that same name
   label's live bounding rect rather than the sprite's, so they always
   clear the label — including a stacked one — before floating upward,

@@ -5,14 +5,16 @@ Scratch doc for cosmetic systems layered on top of the shipped mascot
 [mascotSpec_notes.md](mascotSpec_notes.md), full rationale/history in
 [mascotHistory_notes.md](mascotHistory_notes.md)). This is where new unlock
 ideas get roughed out before they turn into real spec/implementation,
-same "resolved vs. still open" split those docs already use. Two of the
-proposals below have since actually shipped — the body base/trim split
-and the title-rendering system that replaced skill hats' worn-image
-rendering. Both real implementation records live in mascotHistory_notes.md
-("Body art split into base + trim layers (shipped)" and "Title
-rendering system (shipped)"), not here; this doc keeps only short
-pointers to them. Buyable bodies and buyable hats are still unbuilt —
-**nothing in this doc should be coded until explicitly told to.**
+same "resolved vs. still open" split those docs already use. Three of the
+proposals below have since actually shipped — the body base/trim split,
+the title-rendering system that replaced skill hats' worn-image
+rendering, and buyable hats (so far just its first hat, Daisy — the
+mechanism itself is real). Real implementation records live in
+mascotHistory_notes.md ("Body art split into base + trim layers
+(shipped)", "Title rendering system (shipped)", and "Buyable hats — first
+shop hat shipped (Daisy)"), not here; this doc keeps only short pointers
+to them. Buyable bodies are still unbuilt — **nothing in this doc should
+be coded until explicitly told to.**
 
 ## Currently shipped, for reference
 
@@ -27,13 +29,12 @@ pointers to them. Buyable bodies and buyable hats are still unbuilt —
 - **Titles**: skill-level unlocks (25/50/75/90/99, plus completionist)
   render as a colored/shimmer title next to the pet's name
   (`equippedTitle`), not a worn hat image — see mascotHistory_notes.md's
-  "Title rendering system (shipped)". The old base+trim hat-image
-  pipeline (`resolveHat`, hat anchors, hat PNGs) still exists in
-  `mascot.js` untouched, just dormant — reserved for the still-unbuilt
-  buyable-hats proposal below, which will write to the separate
-  `equippedHat` field instead. Tokens only buy skin colors and AFK
-  blocks today (`PREMIUM_SWATCHES` / AFK-block table in
-  mascotSpec_notes.md) — nothing is purchasable yet.
+  "Title rendering system (shipped)". The base+trim hat-image pipeline
+  (`resolveHat`, hat anchors, hat PNGs) now also serves real buyable hats
+  via the separate `equippedHat` field — see mascotHistory_notes.md's
+  "Buyable hats — first shop hat shipped (Daisy)". Tokens buy skin colors,
+  AFK blocks, and shop hats today (`PREMIUM_SWATCHES` / AFK-block table in
+  mascotSpec_notes.md / `HAT_SHOP_ITEMS` in `mascot.js`).
 - **Anchoring**: every asset (body, hat base/trim, prop) shares one
   fixed 64×64 canvas and origin. Hats/props position via a per-stage
   head/hand anchor point, translated against the asset's own fixed
@@ -66,6 +67,12 @@ not multiplicative" asset philosophy the original design used for
 hats/props.
 
 ## Buyable hats (purchasable, not just skill-unlocked)
+
+**First hat shipped — see mascotHistory_notes.md's "Buyable hats — first
+shop hat shipped (Daisy)".** The catalog (`HAT_SHOP_ITEMS` in `mascot.js`)
+is an array, so this proposal's remaining scope is now just "add more
+entries + art," not a new mechanism — the purchase/equip/rendering
+pipeline described below is real and shipped.
 
 Idea: alongside the existing skill-level-gated hats, add hats that are
 directly purchasable with tokens — same base + trim two-layer

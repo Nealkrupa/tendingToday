@@ -203,8 +203,9 @@ below the sprite, out of flow, with the sprite itself shifted up (slot
 automatically extend for a wide equipped title and shrink back for a bare
 short name: not overlapping → every label sits directly under its own
 sprite, no offset; overlapping → labels stack vertically with the
-**viewer's own pet's name always on top of the stack**
-(`widgetState.myPetKey`), other pet(s) filling in below it. The viewer's
+**viewer's own pet's name always staying at the bottom of the stack**
+(level 0, no lift — keyed off `widgetState.myPetKey`), other pet(s)
+lifted above it. The viewer's
 own pet also always paints on top when two sprites cross (`z-index` keyed
 to `widgetState.myPetKey`). A debounced
 resize listener re-clamps any pet that falls outside the ground's current

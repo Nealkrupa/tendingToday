@@ -460,7 +460,7 @@
 </script>
 
 <script src="achievements.js?v=6"></script>
-<script src="mascot.js?v=60"></script>
+<script src="mascot.js?v=62"></script>
 
 <script>
 (function () {
@@ -492,6 +492,24 @@
     { color: '#2ECC71', price: 40, tierLabel: 'Rare' },
     { color: RAINBOW_SKIN, price: 80, tierLabel: 'Legendary' }
   ];
+  // Mirrors mascot.js's HAT_SHOP_ITEMS — see that file's own comment for the
+  // shopHatId(itemId, color) id shape this grid's force-equip buttons use.
+  const HAT_SHOP_ITEMS = [
+    {
+      id: 'daisy',
+      label: 'Daisy',
+      colors: [
+        { color: '#F2F0E6', price: 5, tierLabel: 'Common' },
+        { color: '#F0E2A8', price: 5, tierLabel: 'Common' },
+        { color: '#E8A9BE', price: 20, tierLabel: 'Uncommon' },
+        { color: '#B8A0D9', price: 20, tierLabel: 'Uncommon' },
+        { color: '#C9548B', price: 40, tierLabel: 'Rare' },
+        { color: '#8B5FBF', price: 40, tierLabel: 'Rare' },
+        { color: RAINBOW_SKIN, price: 80, tierLabel: 'Legendary' }
+      ]
+    }
+  ];
+  function shopHatId(itemId, color) { return 'shop-' + itemId + '-' + color; }
   function rsRawXP(level, divisor) {
     let total = 0;
     for (let n = 1; n < level; n++) total += Math.floor(n + 300 * Math.pow(2, n / divisor));
@@ -613,6 +631,7 @@
       equippedTitle: null,
       equippedHat: null,
       petName: null,
+      purchasedHats: [],
       purchasedSkinColors: [],
       skinColor: '#5B7B9A',
       activeAfkBlock: null,
@@ -649,7 +668,8 @@
         }).join('') +
         '<div class="row"><label>Pet name</label><input type="text" data-field="petName" data-pet="' + petKey + '" value="' + (pet.petName || '') + '" placeholder="defaults to the signed-in user\'s name"></div>' +
         '<div class="row"><label>Equipped title</label><input type="text" data-field="equippedTitle" data-pet="' + petKey + '" value="' + (pet.equippedTitle || '') + '" placeholder="e.g. woodcutting-25, woodcutting-max, completionist"></div>' +
-        '<div class="row"><label>Equipped hat</label><input type="text" data-field="equippedHat" data-pet="' + petKey + '" value="' + (pet.equippedHat || '') + '" placeholder="reserved for buyable hats — none exist yet"></div>' +
+        '<div class="row"><label>Equipped hat</label><input type="text" data-field="equippedHat" data-pet="' + petKey + '" value="' + (pet.equippedHat || '') + '" placeholder="e.g. shop-daisy-#F2F0E6"></div>' +
+        '<div class="row"><label>Purchased hats</label><input type="text" data-field="purchasedHats" data-pet="' + petKey + '" value="' + (pet.purchasedHats || []).join(', ') + '" placeholder="comma-separated hat ids, e.g. shop-daisy-#F2F0E6"></div>' +
         '<div class="row"><label>Purchased skin colors</label><input type="text" data-field="purchasedSkinColors" data-pet="' + petKey + '" value="' + (pet.purchasedSkinColors || []).join(', ') + '" placeholder="comma-separated hex, e.g. #5C6E78, #3F7F73"></div>' +
         '<div class="row"><label>Skin color</label><input type="text" data-field="skinColor" data-pet="' + petKey + '" value="' + (pet.skinColor || '#5B7B9A') + '" placeholder="hex, or \'rainbow\' for the cycling skin"></div>' +
         '<div class="row"><button data-apply-pet="' + petKey + '">Apply this pet’s fields</button></div>' +
@@ -682,6 +702,21 @@
               s.price + ' tokens' + (owned ? ' (owned)' : ' (not purchased — forcing equips it anyway)') + '">' +
               '<span class="dt-swatch-dot' + (isRainbow ? ' rainbow' : '') + '"' + dotStyle + '></span>' +
               s.tierLabel + ' ' + s.price + '🪙️</button>';
+          }).join('') +
+        '</div>' +
+        '<div class="dt-cosmetics-label">Shop hats — tap to force-equip (dim = not purchased yet; forcing equips it anyway)</div>' +
+        '<div class="dt-grid">' +
+          '<button class="dt-hat-btn unlocked' + (!pet.equippedHat ? ' equipped' : '') + '" data-force-hat="' + petKey + '" data-hat-id="">None</button>' +
+          HAT_SHOP_ITEMS.map(function (item) {
+            return item.colors.map(function (s) {
+              const hatId = shopHatId(item.id, s.color);
+              const owned = (pet.purchasedHats || []).indexOf(hatId) !== -1;
+              const equipped = pet.equippedHat === hatId;
+              return '<button class="dt-hat-btn' + (owned ? ' unlocked' : '') + (equipped ? ' equipped' : '') +
+                '" data-force-hat="' + petKey + '" data-hat-id="' + hatId + '" title="' + item.label + ', ' + s.tierLabel + ', ' +
+                s.price + ' tokens' + (owned ? ' (owned)' : ' (not purchased — forcing equips it anyway)') + '">' +
+                item.label + ' ' + s.tierLabel + '</button>';
+            }).join('');
           }).join('') +
         '</div>' +
         '<div class="row"><label>AFK block</label>' + (blockActive
@@ -733,6 +768,12 @@
         forceSetPetField(petKey, 'skinColor', btn.getAttribute('data-color-value'));
       });
     });
+    wrap.querySelectorAll('[data-force-hat]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const petKey = btn.getAttribute('data-force-hat');
+        forceSetPetField(petKey, 'equippedHat', btn.getAttribute('data-hat-id') || null);
+      });
+    });
   }
 
   // Directly sets one field on one pet and re-renders — used by the
@@ -752,11 +793,11 @@
     renderRawMascot();
   }
 
-  // Maxes every skill (unlocking every hat, including completionist),
-  // marks every premium skin color as owned, and pads tokens generously —
-  // for both pets at once, so the cosmetics grids above have nothing left
-  // locked and any future purchase-flow testing (buyable bodies/hats) has
-  // plenty of currency too. MAX_LEVEL_XP is exactly 1,000,000 by
+  // Maxes every skill (unlocking every title, including completionist),
+  // marks every premium skin color and shop hat as owned, and pads tokens
+  // generously — for both pets at once, so the cosmetics grids above have
+  // nothing left locked and any future purchase-flow testing (buyable
+  // bodies) has plenty of currency too. MAX_LEVEL_XP is exactly 1,000,000 by
   // construction (see XP_SCALE above), same as mascot.js's own level-99
   // threshold.
   function unlockAllCosmetics() {
@@ -767,6 +808,9 @@
       pet.skillXP = {};
       SKILLS.forEach(function (s) { pet.skillXP[s] = MAX_LEVEL_XP; });
       pet.purchasedSkinColors = PREMIUM_SWATCHES.map(function (s) { return s.color; });
+      pet.purchasedHats = HAT_SHOP_ITEMS.reduce(function (ids, item) {
+        return ids.concat(item.colors.map(function (s) { return shopHatId(item.id, s.color); }));
+      }, []);
       pet.tokensBaseline = -1000000; // tokens = liveTotal - tokensBaseline - tokensSpent
       pets[petKey] = pet;
     });
@@ -787,7 +831,7 @@
         pet.skillXP = Object.assign({}, pet.skillXP, { [skill]: val });
       } else if (field === 'equippedHat' || field === 'equippedTitle' || field === 'petName') {
         pet[field] = val.trim() ? val.trim() : null;
-      } else if (field === 'purchasedSkinColors') {
+      } else if (field === 'purchasedSkinColors' || field === 'purchasedHats') {
         pet[field] = val.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
       } else {
         pet[field] = val;

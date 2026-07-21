@@ -1675,3 +1675,66 @@ Script tag progression across these sessions: `mascot.js?v=50` → `v=57`
 (`v=52` skipped one number partway through — a couple of same-session edits
 bumped it twice before the HTML files were saved — no functional
 significance).
+
+## Buyable hats — first shop hat shipped (Daisy)
+
+The buyable-hats proposal from `mascotScratch_notes.md` shipped for real,
+starting with one hat: **Daisy**. The catalog (`HAT_SHOP_ITEMS` in
+`mascot.js`) is a plain array of `{ id, label, colors: [...] }`, so adding a
+second hat later is just another array entry plus its own base/trim art —
+no other code changes needed.
+
+- **hatId shape:** `shop-{itemId}-{color}` (`shopHatId()` builds it,
+  `resolveHat()`'s `shopMatch` regex parses it back apart) — distinct from
+  skill-hat ids (`{skill}-{tier}`, `{skill}-max`, `completionist`) by the
+  leading `shop-` prefix, so `resolveHat()` can tell the two families apart
+  before falling through to the skill-hat branches. The color rides inside
+  the id itself rather than a separate stored field, since a shop hat's
+  owned/equipped color is exactly analogous to `purchasedSkinColors`/
+  `skinColor`, just scoped per-hat instead of per-pet.
+- **Palette reuses the `PREMIUM_SWATCHES` tier ladder exactly** (7 colors:
+  2 Common/5🪙, 2 Uncommon/20🪙 pulse, 2 Rare/40🪙 shimmer, 1 Legendary/80🪙
+  rainbow) rather than inventing hat-specific pricing, per the locked-in
+  decision in `mascotScratch_notes.md`. Daisy's own 7 colors follow real
+  *Bellis perennis* coloring — white/cream (common wild color) → pink/
+  lavender (garden cultivars) → deep rose/purple (rarer saturated
+  cultivars) → rainbow (fantasy legendary, same treatment every other
+  Legendary cosmetic gets).
+- **Rendering reuses the skin-color flair techniques directly**, not a new
+  pattern: pulse reuses `.mascot-body-pulse` (a generic brightness pulse
+  despite the body-specific class name), shimmer reuses the existing
+  `.mascot-tint-rect`/`.mascot-shimmer-bar` mask-and-sweep, rainbow reuses
+  `buildCyclingLayers`. `renderSprite`'s hat block gained one new branch
+  (`hat.kind === 'shop'`) ahead of the existing completionist/max/standard
+  branches, which are otherwise untouched.
+- **Purchase flow mirrors `purchaseSkinColor` exactly**: a transactional
+  `purchaseHat(petKey, hatId, price)` that re-reads live tokens inside the
+  transaction (race guard), appends to `purchasedHats`, and auto-equips the
+  purchased hat (`skinColor`'s purchase flow does the same — buying a color
+  wears it immediately).
+- **`equippedHat`'s stale-data guard replaced.** It used to unconditionally
+  null out any stored `equippedHat` on every grant transaction (a "nothing
+  is valid yet" placeholder from before this catalog existed). Now it
+  validates against the real catalog — `pet.purchasedHats` must contain the
+  id *and* `resolveHat(id)` must resolve — the same shape the
+  `equippedTitle` staleness check next to it already used.
+- **Assets moved out of a `pet-assets/hats/` subfolder into flat
+  `pet-assets/`** alongside every other hat, to match the "one folder,
+  category-prefix-first" naming convention (`hat-shop-daisy-base.png`,
+  `hat-shop-daisy-trim.png` — the filenames themselves were already correct
+  per `mascotScratch_notes.md`'s naming section, only the folder was off).
+- **`mascot-devtools.html` updated to match**: its own `defaultPet()`
+  mirror gained `purchasedHats: []`, a "Shop hats" force-equip grid was
+  added next to the existing skin-color grid (same dim-if-not-owned
+  pattern), the `equippedHat`/new `purchasedHats` text fields' stale
+  placeholders were corrected, and `unlockAllCosmetics()` now also marks
+  every shop-hat color as owned.
+- **`ASSET_VERSION` bumped `v=7` → `v=8`** (new hat art); script tag bumped
+  `v=61` → `v=62` across every page that loads `mascot.js`.
+
+Verified in `mascot-devtools.html`'s offline mock: force-equipping an
+unpurchased hat gets silently cleared on the next grant transaction (the
+new staleness guard working as intended, same as an unearned title would);
+buying a hat through the real customize-page picker flow correctly appends
+to `purchasedHats`, spends tokens, auto-equips, and the large preview
+renders the tinted trim at the correct per-stage head anchor.

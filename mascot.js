@@ -80,6 +80,43 @@
     return s ? s.flair : null;
   }
 
+  // Buyable hats (see mascotScratch_notes.md's "Buyable hats" section) —
+  // directly purchasable with tokens, same base+trim two-layer construction
+  // as skill hats, reusing the skin-color tier ladder's price/flair shape
+  // (Common/Uncommon/Rare/Legendary) rather than a separate hat-pricing
+  // scheme. Each shop item is one bespoke base+trim shape with its own
+  // 7-color palette (trims are grayscale, tinted live via getTintedImage —
+  // no per-color file, same as PREMIUM_SWATCHES).
+  const HAT_SHOP_ITEMS = [
+    {
+      id: 'daisy',
+      label: 'Daisy',
+      // Palette follows real Bellis perennis (English daisy) coloring —
+      // white/cream is the common wild color, pink and lavender show up in
+      // garden cultivars, deep rose/purple are rarer saturated cultivars,
+      // rainbow is the fantasy legendary chase tier (same treatment every
+      // other Legendary cosmetic gets).
+      colors: [
+        { color: '#F2F0E6', price: 5, flair: null, tierLabel: 'Common' },
+        { color: '#F0E2A8', price: 5, flair: null, tierLabel: 'Common' },
+        { color: '#E8A9BE', price: 20, flair: 'pulse', tierLabel: 'Uncommon' },
+        { color: '#B8A0D9', price: 20, flair: 'pulse', tierLabel: 'Uncommon' },
+        { color: '#C9548B', price: 40, flair: 'shimmer', tierLabel: 'Rare' },
+        { color: '#8B5FBF', price: 40, flair: 'shimmer', tierLabel: 'Rare' },
+        { color: RAINBOW_SKIN, price: 80, flair: 'rainbow', tierLabel: 'Legendary' }
+      ]
+    }
+  ];
+  // hatId shape for a shop hat: `shop-{itemId}-{color}` (color is a hex code
+  // or the RAINBOW_SKIN sentinel) — distinct from skill-hat ids
+  // (`{skill}-{tier}`, `{skill}-max`, `completionist`), so resolveHat() can
+  // tell them apart by the leading `shop-` prefix. The color rides along
+  // inside the id itself (rather than a separate stored field) since a shop
+  // hat's owned/equipped color is exactly analogous to purchasedSkinColors/
+  // skinColor, just scoped per-hat instead of per-pet.
+  function shopHatId(itemId, color) { return 'shop-' + itemId + '-' + color; }
+  function findHatShopItem(itemId) { return HAT_SHOP_ITEMS.find((h) => h.id === itemId); }
+
   const HAT_TIER_LEVELS = [25, 50, 75, 90]; // standard-hat unlock tiers (99 = bespoke max hat, handled separately)
 
   // ---------------------------------------------------------------------
@@ -287,7 +324,7 @@
   // the shared .js files) whenever a pet-assets PNG is replaced in place —
   // browsers otherwise keep serving the old cached bytes indefinitely, since
   // the filename itself never changes.
-  const ASSET_VERSION = 'v=7';
+  const ASSET_VERSION = 'v=8';
   const ASSET_BASE = 'pet-assets/';
   function assetUrl(file) { return ASSET_BASE + file + '?' + ASSET_VERSION; }
 
@@ -303,6 +340,7 @@
     .concat(STAGES.flatMap((s) => [1, 2].flatMap((f) => ['base', 'trim'].map((layer) => 'pet-body-' + s.key + '-' + f + '-' + layer + '.png'))))
     .concat(SKILLS.flatMap((skill) => ['base', 'trim', 'max-base', 'max-trim'].map((suffix) => 'hat-' + skill + '-' + suffix + '.png')))
     .concat(['hat-completionist-base.png', 'hat-completionist-trim.png'])
+    .concat(HAT_SHOP_ITEMS.flatMap((h) => ['base', 'trim'].map((layer) => 'hat-shop-' + h.id + '-' + layer + '.png')))
     .concat(SKILLS.map((skill) => 'prop-' + skill + '.png'))
     .concat(['ground-tile-light-mode.png', 'ground-tile-dark-mode.png']);
 
@@ -376,6 +414,7 @@
       equippedTitle: null,      // skill-tier ids ({skill}-{tier}, {skill}-max, 'completionist') — resolveTitle()
       equippedHat: null,        // buyable-hat ids only, going forward — resolveHat()
       petName: null,            // custom display name; falls back to labelForPet(petKey) when unset
+      purchasedHats: [],        // shop hat ids owned (shopHatId(itemId, color)) — HAT_SHOP_ITEMS
       purchasedSkinColors: [],  // hex codes owned beyond the free SWATCH_COLORS
       skinColor: DEFAULT_SKIN_COLORS[petKey] || '#5B7B9A',
       activeAfkBlock: null,     // or { hours, price, startedAt, xpGrantedSoFar }
@@ -487,12 +526,14 @@
           const unlockedTitleIds = unlockedHatsForPet(pet).map((h) => h.id);
           if (unlockedTitleIds.indexOf(pet.equippedTitle) === -1) pet.equippedTitle = null;
         }
-        // equippedHat is cleared unconditionally for now: the buyable-hat
-        // catalog it's reserved for (mascotScratch_notes.md) hasn't shipped,
-        // so nothing is currently a valid value — any stored value today is
-        // leftover data from before titles/hats split. Replace this with a
-        // real catalog check once buyable hats exist.
-        if (pet.equippedHat) pet.equippedHat = null;
+        // Now that buyable hats have a real catalog (HAT_SHOP_ITEMS), an
+        // equipped hat is valid only if it's still both a real shop-hat id
+        // and one this pet actually owns — catches a retired hat/color the
+        // same way the equippedTitle check above catches a retired title.
+        if (pet.equippedHat) {
+          const owned = pet.purchasedHats || [];
+          if (owned.indexOf(pet.equippedHat) === -1 || !resolveHat(pet.equippedHat)) pet.equippedHat = null;
+        }
 
         const activeSkill = SKILLS.includes(pet.activeSkill) ? pet.activeSkill : 'woodcutting';
         const skillXP = Object.assign({ woodcutting: 0, gardening: 0, fishing: 0 }, pet.skillXP || {});
@@ -630,6 +671,34 @@
     }
   }
 
+  // Spends tokens on a purchasable shop-hat color — same transactional shape
+  // as purchaseSkinColor (owned/tokens race guard), just against
+  // purchasedHats/equippedHat instead of purchasedSkinColors/skinColor.
+  async function purchaseHat(petKey, hatId, price) {
+    try {
+      await firebase.firestore().runTransaction(async (tx) => {
+        const achSnap = await tx.get(achievementsRef());
+        const mascotSnap = await tx.get(mascotRef());
+        const liveTotal = sumCounts((achSnap.exists ? achSnap.data() : {}).counts || {});
+        const mascotData = mascotSnap.exists ? mascotSnap.data() : {};
+        const pets = Object.assign({}, mascotData.pets || {});
+        const pet = Object.assign(defaultPet(petKey), pets[petKey] || {});
+        const owned = pet.purchasedHats || [];
+        if (owned.indexOf(hatId) !== -1) return; // already owned
+        const tokens = computeTokens(pet, liveTotal);
+        if (tokens < price) return; // can't afford — button should already be disabled, this is just the race guard
+        pets[petKey] = Object.assign({}, pet, {
+          tokensSpent: (pet.tokensSpent || 0) + price,
+          purchasedHats: owned.concat([hatId]),
+          equippedHat: hatId
+        });
+        tx.set(mascotRef(), { pets }, { merge: true });
+      });
+    } catch (e) {
+      console.error('Mascot purchaseHat failed', e);
+    }
+  }
+
   // Spends tokens on an AFK-time block — same transactional shape as
   // purchaseSkinColor. No-ops if a block's already active (the block itself
   // is the only limiter — see mascotHistory_notes.md) or tokens fall short.
@@ -741,6 +810,29 @@
       }).join('');
       return `<div class="mascot-xp-line" style="margin-top:6px;">${g.label} (${g.price}${TOKEN_ICON}):</div><div class="mascot-swatch-row">${swatchesHtml}</div>`;
     }).join('');
+    // Shop hats — same tier-grouped swatch treatment as premium skin colors
+    // (see premiumTiersHtml above), just one row of items per hat instead of
+    // one flat row per pet, since each hat has its own bespoke shape/palette.
+    // Clicking an owned swatch equips that hat+color; clicking a locked one
+    // purchases (which also equips, per purchaseHat).
+    const ownedHats = pet.purchasedHats || [];
+    const shopHatsHtml = HAT_SHOP_ITEMS.map((item) => {
+      const rowsHtml = item.colors.map((s) => {
+        const hatId = shopHatId(item.id, s.color);
+        const isRainbow = s.color === RAINBOW_SKIN;
+        const hasShimmerSweep = s.flair === 'shimmer' || isRainbow;
+        const flairClass = (s.flair === 'pulse' ? ' mascot-swatch-pulse' : '') + (isRainbow ? ' mascot-swatch-rainbow' : '');
+        const pulseStyle = s.flair === 'pulse' ? ` animation-delay:${phaseDelay(2200)};` : '';
+        const sweepHtml = hasShimmerSweep ? `<div class="mascot-swatch-shimmer-sweep" style="animation-delay:${phaseDelay(1800)};"></div>` : '';
+        const bgStyle = isRainbow ? '' : `background:${s.color};`;
+        if (ownedHats.indexOf(hatId) !== -1) {
+          return `<div class="mascot-swatch${flairClass}${pet.equippedHat === hatId ? ' mascot-swatch-active' : ''}" data-hat-equip="${hatId}" style="${bgStyle}${pulseStyle}">${sweepHtml}</div>`;
+        }
+        const afford = pet.__tokens >= s.price;
+        return `<div class="mascot-swatch mascot-swatch-locked${flairClass}" data-buy-hat-id="${hatId}" data-buy-hat-price="${s.price}" style="${bgStyle}opacity:${afford ? '0.85' : '0.35'};${pulseStyle}" title="${s.tierLabel}, ${s.price} tokens">${sweepHtml}${s.price}</div>`;
+      }).join('');
+      return `<div class="mascot-xp-line" style="margin-top:6px;">${item.label}:</div><div class="mascot-swatch-row">${rowsHtml}</div>`;
+    }).join('');
     return `
       <div class="mascot-xp-line">Pet name:</div>
       <div class="mascot-name-row">
@@ -752,12 +844,31 @@
       <div class="mascot-xp-line" style="margin-top:8px;">Skin color:</div>
       <div class="mascot-swatch-row">${freeSwatchesHtml}</div>
       ${premiumTiersHtml}
+      <div class="mascot-xp-line" style="margin-top:8px;">Hats:</div>
+      <div class="mascot-hat-list"><button class="mascot-hat-btn${pet.equippedHat ? '' : ' mascot-hat-equipped'}" data-hat-equip="">None</button></div>
+      ${shopHatsHtml}
     `;
   }
 
   // Resolves an equippedHat id into asset paths + tint info for rendering.
   function resolveHat(hatId) {
     if (!hatId) return null;
+    const shopMatch = /^shop-([a-z0-9]+)-(.+)$/.exec(hatId);
+    if (shopMatch) {
+      const item = findHatShopItem(shopMatch[1]);
+      if (!item) return null;
+      const swatch = item.colors.find((c) => shopHatId(item.id, c.color) === hatId);
+      if (!swatch) return null;
+      return {
+        base: assetUrl('hat-shop-' + item.id + '-base.png'),
+        trim: assetUrl('hat-shop-' + item.id + '-trim.png'),
+        anchor: HAT_ANCHOR_STANDARD,
+        shimmer: null,
+        kind: 'shop',
+        tintColor: swatch.color === RAINBOW_SKIN ? null : swatch.color,
+        flair: swatch.flair
+      };
+    }
     if (hatId === 'completionist') {
       return {
         base: assetUrl('hat-completionist-base.png'),
@@ -1571,6 +1682,13 @@
     });
     const completionistTrimUrl = assetUrl('hat-completionist-trim.png');
     CYCLE_COLORS.forEach((color) => tasks.push(() => getTintedImage(completionistTrimUrl, color)));
+    HAT_SHOP_ITEMS.forEach((item) => {
+      const shopTrimUrl = assetUrl('hat-shop-' + item.id + '-trim.png');
+      item.colors.forEach((s) => {
+        if (s.color === RAINBOW_SKIN) { CYCLE_COLORS.forEach((color) => tasks.push(() => getTintedImage(shopTrimUrl, color))); }
+        else tasks.push(() => getTintedImage(shopTrimUrl, s.color));
+      });
+    });
     runIdleQueue(tasks);
   }
 
@@ -1808,8 +1926,25 @@
       const anchor = hat.anchor;
       const txPct = (stage.head.x - anchor.x) / 64 * 100;
       const tyPct = (stage.head.y - anchor.y) / 64 * 100 + bobPct;
-      let trimHtml, shimmerHtml = '';
-      if (hat.shimmer === 'completionist') {
+      let trimHtml, shimmerHtml = '', trimClass = '', trimDelay = '';
+      if (hat.kind === 'shop') {
+        // Same three-flair treatment PREMIUM_SWATCHES' skin colors already
+        // get (pulse/shimmer/rainbow) — reusing that exact pattern rather
+        // than a new one, since a shop hat's color ladder is the same
+        // Common/Uncommon/Rare/Legendary shape.
+        if (hat.flair === 'rainbow') {
+          trimHtml = buildCyclingLayers(hat.trim, CYCLE_COLORS);
+        } else {
+          trimClass = hat.flair === 'pulse' ? ' mascot-body-pulse' : '';
+          trimDelay = hat.flair === 'pulse' ? `animation-delay:${phaseDelay(2200)};` : '';
+          trimHtml = `<img class="${trimClass}" src="${getTintedImage(hat.trim, hat.tintColor) || hat.trim}" style="position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;${trimDelay}" />`;
+        }
+        if (hat.flair === 'shimmer' || hat.flair === 'rainbow') {
+          shimmerHtml = `<div class="mascot-tint-rect" style="-webkit-mask-image:url('${hat.trim}');mask-image:url('${hat.trim}');overflow:hidden;">
+            <div class="mascot-shimmer-bar" style="background:rgba(255,255,255,0.85);animation-delay:${phaseDelay(2600)};"></div>
+          </div>`;
+        }
+      } else if (hat.shimmer === 'completionist') {
         // Was a hard jump-cut every 1.5s (Math.floor(Date.now()/1500)%6
         // picking a single discrete tint) — now crossfades continuously
         // through CYCLE_COLORS via buildCyclingLayers instead. Uses the
@@ -2051,12 +2186,13 @@
   // Not overlapping: every name sits at level 0, directly under its own
   // sprite, no offset. Overlapping: names within that overlap cluster stack
   // vertically instead of drifting apart horizontally, with the *viewer's
-  // own* pet's name always lifted highest (top of the stack) regardless of
-  // which side of the cluster it's actually standing on — the other pet(s)
-  // in the cluster fill in below it, left-to-right. This deliberately
-  // ignores position for the ordering (only using it to detect clusters),
-  // the inverse of an earlier version that stacked purely by left-to-right
-  // order. The base `translateX(-50%)` (matching the label's own
+  // own* pet's name always staying at the bottom of the stack (level 0, no
+  // lift, right under its own sprite) regardless of which side of the
+  // cluster it's actually standing on — the other pet(s) in the cluster
+  // stack above it, left-to-right. This deliberately ignores position for
+  // the ordering (only using it to detect clusters), the inverse of an
+  // earlier version that stacked purely by left-to-right order. The base
+  // `translateX(-50%)` (matching the label's own
   // `left: 50%`) has to be re-applied alongside translateY on every update
   // since this assignment replaces the whole `transform`, not just one axis.
   const NAME_STACK_OFFSET_PX = 14;
@@ -2089,11 +2225,12 @@
         cluster[0].nameEl.style.transform = 'translateX(-50%)';
         return;
       }
-      // Own pet goes last so it lands on the highest level (most lift);
-      // everyone else keeps their left-to-right order beneath it.
+      // Own pet goes first so it lands on level 0 (no lift, bottom of the
+      // stack, right under its own sprite); everyone else stacks above it
+      // in their left-to-right order.
       const others = cluster.filter((e) => e.key !== widgetState.myPetKey);
       const mine = cluster.find((e) => e.key === widgetState.myPetKey);
-      const ordered = mine ? [...others, mine] : cluster;
+      const ordered = mine ? [mine, ...others] : cluster;
       ordered.forEach((entry, level) => {
         const lift = level ? ' translateY(-' + (NAME_STACK_OFFSET_PX * level) + 'px)' : '';
         entry.nameEl.style.transform = 'translateX(-50%)' + lift;
@@ -2448,13 +2585,25 @@
         container.querySelectorAll('.mascot-swatch[data-color]').forEach((el) => {
           el.addEventListener('click', () => { setSkinColor(petKey, el.getAttribute('data-color')); });
         });
-        container.querySelectorAll('.mascot-swatch-locked').forEach((el) => {
+        container.querySelectorAll('.mascot-swatch-locked[data-buy-color]').forEach((el) => {
           el.addEventListener('click', () => {
             const color = el.getAttribute('data-buy-color');
             const price = parseInt(el.getAttribute('data-buy-price'), 10);
             if (pet.__tokens < price) return;
             if (!confirm(`Spend ${price} ${TOKEN_ICON} tokens to unlock this color?`)) return;
             purchaseSkinColor(petKey, color, price);
+          });
+        });
+        container.querySelectorAll('[data-hat-equip]').forEach((el) => {
+          el.addEventListener('click', () => { setEquippedHat(petKey, el.getAttribute('data-hat-equip') || null); });
+        });
+        container.querySelectorAll('.mascot-swatch-locked[data-buy-hat-id]').forEach((el) => {
+          el.addEventListener('click', () => {
+            const hatId = el.getAttribute('data-buy-hat-id');
+            const price = parseInt(el.getAttribute('data-buy-hat-price'), 10);
+            if (pet.__tokens < price) return;
+            if (!confirm(`Spend ${price} ${TOKEN_ICON} tokens to unlock this hat?`)) return;
+            purchaseHat(petKey, hatId, price);
           });
         });
         renderPreview(pet);
