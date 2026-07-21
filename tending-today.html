@@ -306,6 +306,67 @@
     font-family: inherit;
   }
 
+  .away-row {
+    display: flex;
+    justify-content: center;
+    margin: 20px 20px 0;
+  }
+  .away-toggle-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--card);
+    color: var(--muted);
+    border: 1.5px solid var(--line);
+    border-radius: 999px;
+    padding: 10px 20px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.12s ease;
+  }
+  .away-toggle-pill:hover { border-color: var(--sage); }
+  .away-toggle-pill:active { transform: scale(0.97); }
+
+  /* Away-mode replaces the whole page: mostly blank and visually muted, so
+     it reads at a glance as "nothing to do here" rather than a normal
+     screen. The toggle pill itself keeps full contrast (its own card
+     background + border) so it's still an obvious, easy tap target against
+     the dimmed backdrop. */
+  #app.away-mode {
+    display: flex;
+    align-items: center;
+  }
+  .away-screen {
+    width: 100%;
+    min-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 40px 24px;
+    text-align: center;
+  }
+  .away-screen .away-icon { font-size: 38px; opacity: 0.5; }
+  .away-screen h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 20px;
+    color: var(--muted);
+    margin: 0;
+  }
+  .away-screen p {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--muted);
+    opacity: 0.85;
+    max-width: 280px;
+    margin: 0;
+  }
+  .away-screen .away-toggle-pill { margin-top: 8px; }
+
   html[data-theme="dark"] {
     --bg: #1B1E1A;
     --card: #242821;
@@ -555,7 +616,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js" defer></script>
 <script src="auth.js?v=2"></script>
 <script src="visits.js?v=1"></script>
-<script src="achievements.js?v=6" defer></script>
+<script src="achievements.js?v=7" defer></script>
 <div id="app"></div>
 
 <script>
@@ -678,6 +739,7 @@ document.addEventListener('DOMContentLoaded', function () {
     daily: {},
     zoneDone: false,
     perfectWeekAchieved: false,
+    away: false,
     pet: { count: 0 },
     rotisserie: buildFreshRotisserie()
   };
@@ -705,10 +767,17 @@ document.addEventListener('DOMContentLoaded', function () {
   function normalizeAndReset(raw) {
     let s = raw ? JSON.parse(JSON.stringify(raw)) : structuredClone(defaultState);
     let changed = false;
+    let awayBridgeDate = null;
     const todayNow = currentToday();
     const wkNow = currentWeekKey();
-    if (s.date !== todayNow) { s.date = todayNow; s.daily = {}; s.zoneDone = false; s.perfectWeekAchieved = false; changed = true; }
+    if (s.date !== todayNow) {
+      // If away mode was already on going into this rollover, today counts
+      // as a bridged day rather than a broken one — see recordAwayDay.
+      if (s.away) awayBridgeDate = todayNow;
+      s.date = todayNow; s.daily = {}; s.zoneDone = false; s.perfectWeekAchieved = false; changed = true;
+    }
     if (typeof s.perfectWeekAchieved !== 'boolean') { s.perfectWeekAchieved = false; changed = true; }
+    if (typeof s.away !== 'boolean') { s.away = false; changed = true; }
     if (s.weekKey !== wkNow) {
       s.weekKey = wkNow;
       if (!s.pet) s.pet = { count: 0 };
@@ -722,13 +791,23 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (!s.pet) { s.pet = { count: 0 }; changed = true; }
     if (!s.rotisserie || !Array.isArray(s.rotisserie.active)) { s.rotisserie = buildFreshRotisserie(); changed = true; }
+    return { s, changed, awayBridgeDate };
+  }
+
+  // Thin wrapper around normalizeAndReset used by every call site: on top of
+  // the usual day/week reset, it also fires the away-mode streak bridge
+  // (achievements.js's recordAwayDay) the moment a date rollover is detected
+  // while away mode is on, without every caller having to remember to.
+  function applyNormalizeAndReset(raw) {
+    const { s, changed, awayBridgeDate } = normalizeAndReset(raw);
+    if (awayBridgeDate && window.recordAwayDay) recordAwayDay(awayBridgeDate);
     return { s, changed };
   }
 
   async function load() {
     try {
       const snap = await docRef.get();
-      const { s, changed } = normalizeAndReset(snap.exists ? snap.data() : null);
+      const { s, changed } = applyNormalizeAndReset(snap.exists ? snap.data() : null);
       state = s;
       if (changed || !snap.exists) {
         await save();
@@ -738,7 +817,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // Live sync: reflect changes from other devices instantly
       docRef.onSnapshot((snapshot) => {
         if (!snapshot.exists) return;
-        const { s: incoming, changed: needsWrite } = normalizeAndReset(snapshot.data());
+        const { s: incoming, changed: needsWrite } = applyNormalizeAndReset(snapshot.data());
         state = incoming;
         render();
         if (needsWrite) save();
@@ -756,7 +835,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // reset check against the current real date right before writing, so
       // a stale tab can never push yesterday's leftover checkmarks over a
       // fresh day that another device (or a reload) already reset.
-      const { s: corrected, changed } = normalizeAndReset(state);
+      const { s: corrected, changed } = applyNormalizeAndReset(state);
       state = corrected;
       await docRef.set(state);
       if (window.trackPageUpdate) window.trackPageUpdate('tending-today');
@@ -941,7 +1020,38 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
+  // Away mode replaces the entire page with a blank, dimmed screen whose
+  // only control is the toggle itself — no checkboxes, no home button — so
+  // there's nothing left to accidentally interact with while traveling.
+  // Also clears any foundations-fx overlay left over from earlier today,
+  // since that overlay is appended to document.body (outside #app) and
+  // wouldn't otherwise be touched by swapping out #app's own content.
+  function renderAwayScreen() {
+    const fx = document.getElementById('foundations-fx');
+    if (fx) fx.classList.remove('active', 'week');
+    const badge = document.getElementById('foundations-week-badge');
+    if (badge) badge.classList.remove('show');
+
+    app.classList.add('away-mode');
+    app.innerHTML = `<div class="away-screen">
+      <div class="away-icon">\u{1F9F3}</div>
+      <h1>Away from home</h1>
+      <p>Tasks are paused and today’s streak is safe. Turn this off when you’re back to pick up where you left off.</p>
+      <button class="away-toggle-pill" type="button" id="away-toggle-btn">
+        <span>\u{1F3E0}</span><span>Turn off Away Mode</span>
+      </button>
+    </div>`;
+
+    document.getElementById('away-toggle-btn').addEventListener('click', async () => {
+      state.away = false;
+      await save();
+      render();
+    });
+  }
+
   function render() {
+    if (state.away) { renderAwayScreen(); return; }
+    app.classList.remove('away-mode');
     const frac = dailyFraction();
     const nowLive = new Date();
     const dateLabel = nowLive.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
@@ -1026,6 +1136,12 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>`;
 
     html += `<div class="grace">Missing a day isn\u2019t a failure \u2014 there\u2019s no streak to break. The Daily Foundations are the only thing worth protecting; everything else can wait a week.</div>`;
+
+    html += `<div class="away-row">
+      <button class="away-toggle-pill" type="button" id="away-toggle-btn">
+        <span>\u{1F9F3}</span><span>Away from home</span>
+      </button>
+    </div>`;
     html += `<div style="height:56px;"></div>`;
 
     app.innerHTML = html;
@@ -1079,6 +1195,16 @@ document.addEventListener('DOMContentLoaded', function () {
         render();
       });
     });
+    const awayBtn = document.getElementById('away-toggle-btn');
+    if (awayBtn) awayBtn.addEventListener('click', async () => {
+      state.away = true;
+      await save();
+      // Bridges today immediately (not just on the next date rollover) so a
+      // perfect day completed yesterday isn't lost if away mode gets turned
+      // on before today's own tasks would otherwise have been done.
+      if (window.recordAwayDay) recordAwayDay(currentToday());
+      render();
+    });
   }
 
   requireHouseholdAuth(function() {
@@ -1099,7 +1225,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // rollover, catch it on a timer too, not just on the next click/save.
     setInterval(() => {
       if (!state) return;
-      const { s: corrected, changed } = normalizeAndReset(state);
+      const { s: corrected, changed } = applyNormalizeAndReset(state);
       if (changed) {
         state = corrected;
         render();

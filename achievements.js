@@ -178,4 +178,30 @@
       return null;
     }
   };
+
+  // Bridges the perfect-day streak across a day spent in "away from home"
+  // mode (see tending-today.html's away toggle) so a vacation doesn't read
+  // as a broken streak. Only extends `lastPerfectDate` by exactly one day —
+  // if the streak had already lapsed before away mode was turned on (a gap
+  // bigger than one day), this deliberately leaves it alone rather than
+  // fabricating a bridge across a gap that predates away mode.
+  window.recordAwayDay = async function (todayStr) {
+    try {
+      const db = firebase.firestore();
+      const ref = db.collection('household').doc('achievements-state');
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        const data = snap.exists ? snap.data() : {};
+        const streak = data.streak || { current: 0, best: 0, lastPerfectDate: '' };
+        if (!streak.lastPerfectDate || streak.lastPerfectDate === todayStr) return;
+        const y = new Date(todayStr + 'T12:00:00');
+        y.setDate(y.getDate() - 1);
+        const yesterdayStr = y.getFullYear() + '-' + String(y.getMonth() + 1).padStart(2, '0') + '-' + String(y.getDate()).padStart(2, '0');
+        if (streak.lastPerfectDate !== yesterdayStr) return; // gap predates away mode
+        tx.set(ref, { streak: { current: streak.current || 0, best: streak.best || 0, lastPerfectDate: todayStr } }, { merge: true });
+      });
+    } catch (e) {
+      console.error('Away-day streak bridge failed', e);
+    }
+  };
 })();
