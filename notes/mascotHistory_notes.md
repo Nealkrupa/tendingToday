@@ -1738,3 +1738,70 @@ new staleness guard working as intended, same as an unearned title would);
 buying a hat through the real customize-page picker flow correctly appends
 to `purchasedHats`, spends tokens, auto-equips, and the large preview
 renders the tinted trim at the correct per-stage head anchor.
+
+### `HAT_ANCHOR_STANDARD` retuned + Daisy art replaced (same feature, follow-up)
+
+`HAT_ANCHOR_STANDARD` moved `{31, 46}` → `{33, 49}` (`mascot.js:311`) and
+the Daisy hat's `hat-shop-daisy-base.png`/`hat-shop-daisy-trim.png` were
+replaced with updated art, both hand-done directly in `mascot.js`/
+`pet-assets/` rather than through this doc's usual propose-then-implement
+flow — recorded here after the fact for the trail.
+
+- **`template-hat.png` regenerated** against the new `{33, 49}` point (same
+  purple plus marker, same generation approach `mascotScratch_notes.md`
+  describes — see that doc's "Anchor-point templates for drawing new
+  hats/props" section for the updated coordinate and the flagged drift
+  below).
+- **`HAT_ANCHOR_COMPLETIONIST` was *not* updated and now reads `{31, 46}`**
+  — the pre-existing value, unchanged since it was introduced already
+  matching `HAT_ANCHOR_STANDARD` (see this doc's completionist-hat section
+  above: "there was no basis for [it] to differ"). That basis hasn't
+  changed, so this is very likely meant to move too, but wasn't explicitly
+  requested — left as-is and flagged in `mascotScratch_notes.md` rather
+  than assumed. If left unreconciled, the completionist hat will render at
+  a visibly different height than every other hat once someone actually
+  unlocks it.
+- **`ASSET_VERSION` bumped `v=8` → `v=9`** (Daisy art bytes changed); script
+  tag bumped `v=62` → `v=63` across every page that loads `mascot.js` (the
+  anchor value is JS logic, not just an asset swap).
+
+### `HAT_ANCHOR_STANDARD` reverted back to `{31, 46}`
+
+The `{33, 49}` retune above was a mistake — reverted the same session.
+`HAT_ANCHOR_STANDARD` is back to `{31, 46}`, matching `HAT_ANCHOR_COMPLETIONIST`
+again, so the drift flagged just above no longer exists. `template-hat.png`
+was regenerated back to a plus marker at `(31, 46)`. Daisy's replacement art
+from the same session was *not* reverted — only the anchor coordinate was a
+mistake, the art itself stays. Script tag bumped `v=63` → `v=64` (anchor
+value is JS logic); `ASSET_VERSION` untouched since no PNG bytes changed
+this time.
+
+### Rookie-only hat nudge (the `{33, 49}` offset, scoped correctly this time)
+
+Turned out the `{33, 49}` retune (moved, then reverted, above) was only ever
+meant for the Rookie stage, not global. `HAT_ANCHOR_STANDARD` stays reverted
+at `{31, 46}` for every stage; instead `STAGES`' Rookie entry's `head`
+moved `{27, 32}` → `{25, 29}` (`mascot.js`), which produces the exact same
+on-screen hat position Rookie had under the briefly-global `{33, 49}`
+anchor, without touching Fresh/In-Training/Champion.
+
+- **Why `stage.head` and not a new per-stage hat-offset field:** `head` is
+  consumed by exactly one thing — `renderSprite`'s hat `txPct`/`tyPct` math
+  (confirmed via grep — nothing else in `mascot.js` reads `stage.head`).
+  It's already, functionally, "where hats attach for this stage," so
+  nudging it directly is accurate rather than a workaround — no new
+  abstraction needed for a one-stage tweak. `hand` (prop attachment) is
+  fully separate and untouched.
+- **The math**: `txPct = (head.x - anchor.x)/64*100`, so replicating
+  anchor `{33,49}`'s effect against the now-reverted `anchor={31,46}`
+  means shifting `head` by the anchor's own old-minus-new delta:
+  `head.x -= (33-31) = 2`, `head.y -= (49-46) = 3`. `27-2=25`, `32-3=29`.
+  `headBob` (`+2`, a frame-to-frame relative offset) is untouched by this.
+- **`template-rookie.png` regenerated** with the same solid-plus (frame-1
+  head) / translucent-diamond (frame-2 head, derived) / hollow-ring (hand)
+  marker convention the other stage templates use, at the new coordinates.
+  `mascotScratch_notes.md`'s coordinate table updated with a footnote
+  explaining why Rookie's row is the one exception to "purely anatomical."
+- Script tag bumped `v=64` → `v=65`; `ASSET_VERSION` untouched (no
+  `pet-assets/*.png` loaded via `assetUrl()` changed — `template-*.png`
+  files aren't runtime-loaded).

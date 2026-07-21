@@ -298,7 +298,15 @@
   const STAGES = [
     { key: 'fresh', label: 'Fresh', min: 0, head: { x: 29, y: 48 }, hand: { x: 39, y: 52 }, headBob: -4 },
     { key: 'in-training', label: 'In-Training', min: 10, head: { x: 28, y: 38 }, hand: { x: 32, y: 51 }, headBob: 4 },
-    { key: 'rookie', label: 'Rookie', min: 80, head: { x: 27, y: 32 }, hand: { x: 25, y: 50 }, headBob: 2 },
+    // head nudged { x: 27, y: 32 } -> { x: 25, y: 29 } to bake in the
+    // {33, 49}-anchor hat placement that briefly applied globally to
+    // HAT_ANCHOR_STANDARD before being reverted for every other stage — see
+    // mascotHistory_notes.md's "HAT_ANCHOR_STANDARD reverted..." entry.
+    // stage.head is consumed only by hat positioning (renderSprite's
+    // txPct/tyPct math), never by the body art itself, so this is a
+    // Rookie-hats-only nudge, not a claim that Rookie's actual head
+    // silhouette moved — hand (prop attachment) is untouched.
+    { key: 'rookie', label: 'Rookie', min: 80, head: { x: 25, y: 29 }, hand: { x: 25, y: 50 }, headBob: 2 },
     { key: 'champion', label: 'Champion', min: 300, head: { x: 27, y: 15 }, hand: { x: 22, y: 48 }, headBob: -2 }
   ];
 
@@ -324,7 +332,7 @@
   // the shared .js files) whenever a pet-assets PNG is replaced in place —
   // browsers otherwise keep serving the old cached bytes indefinitely, since
   // the filename itself never changes.
-  const ASSET_VERSION = 'v=8';
+  const ASSET_VERSION = 'v=9';
   const ASSET_BASE = 'pet-assets/';
   function assetUrl(file) { return ASSET_BASE + file + '?' + ASSET_VERSION; }
 

@@ -221,11 +221,21 @@ per-egg offset tuning needed at render time).
   |---|---|---|---|---|
   | Fresh | `template-fresh.png` | (29, 48) | (29, 44) — `headBob -4` | (39, 52) |
   | In-Training | `template-in-training.png` | (28, 38) | (28, 42) — `headBob +4` | (32, 51) |
-  | Rookie | `template-rookie.png` | (27, 32) | (27, 34) — `headBob +2` | (25, 50) |
+  | Rookie | `template-rookie.png` | (25, 29)* | (25, 31) — `headBob +2` | (25, 50) |
   | Champion | `template-champion.png` | (27, 15) | (27, 13) — `headBob -2` | (22, 48) |
 
   (Hat/prop attachment points *within* a hat or prop's own canvas are
   on their own two templates below, not included here.)
+  \* **Rookie's head anchor is the one exception to "purely anatomical."**
+  It's nudged from its original `(27, 32)` to bake in Rookie-only hat
+  placement (equivalent to `HAT_ANCHOR_STANDARD` briefly being `{33, 49}`,
+  reverted everywhere else — see mascotHistory_notes.md). Since
+  `stage.head` is consumed only by hat positioning in `renderSprite`
+  (never by the body art itself), this doesn't misrepresent where Rookie's
+  actual head silhouette sits — but if that ever changes (some other
+  future consumer reads `stage.head` expecting real anatomy), this row
+  would need to split into a real head anchor plus a separate hat-offset
+  field.
 - Generated straight from the live constants above rather than
   hand-placed, so if `STAGES`' anchors or `headBob` values ever get
   retuned in `mascot.js`, regenerating these files is a mechanical
@@ -238,13 +248,14 @@ attachment point *within a hat or prop's own canvas* (as opposed to the
 body-side head/hand anchors above) — where that asset's own "grab
 point" sits, per the art spec in `mascotSpec_notes.md`.
 
-- [`template-hat.png`](../pet-assets/template-hat.png) — a single amethyst plus at
-  (31, 46), `HAT_ANCHOR_STANDARD`/`HAT_ANCHOR_COMPLETIONIST` in
-  `mascot.js:152-157`. Only one marker because every hat — standard,
-  max-skill, and completionist alike — is drawn against this same
-  shared attachment pixel; there's no per-hat-type variant to
-  distinguish. Reusable as a reference overlay for any new buyable
-  hat's base/trim layers too, since those follow the same construction.
+- [`template-hat.png`](../pet-assets/template-hat.png) — a single purple
+  plus at (31, 46), `HAT_ANCHOR_STANDARD` in `mascot.js:311`. Covers
+  standard, max-skill, and shop hats (Daisy included) — all three read
+  `HAT_ANCHOR_STANDARD` in `resolveHat()`. Reusable as a reference overlay
+  for any new buyable hat's base/trim layers too, since those follow the
+  same construction. Matches `HAT_ANCHOR_COMPLETIONIST` (`mascot.js:316`)
+  again — the brief `{33, 49}` retune (see mascotHistory_notes.md) was
+  reverted, so the drift flagged in that entry no longer applies.
 - [`template-prop.png`](../pet-assets/template-prop.png) — three markers, one per
   skill, from `PROP_ANCHORS` in `mascot.js:158-162`: woodcutting (bark
   brown, 33, 46), gardening (leaf green, 36, 54), fishing (water blue,
