@@ -659,22 +659,46 @@ page since its live counts never arrived.
   pet's current spot (`pickWanderTarget`, min separation ~1.3× the sprite
   size, retried a few times and falling back to the largest free gap) so
   the two pets don't settle visually on top of each other.
-  Each pet's name/title label renders **above** its sprite (not below —
-  the sprite stays anchored to the ground line either way, since `bottom:
-  4px` sits on the slot as a whole and the label is just the flex item
-  stacked above it). A wide title/name label can still visually brush the
-  next pet's even while both sprites sit at their normal, separated resting
-  spots (the ~17px gap `MIN_PET_SEPARATION_PX` leaves is comfortable for
-  the sprites but not always for text), so `updateMascotNameStacking()`
-  deliberately keys off the **sprites'** own live overlap, not the labels' —
-  checking label overlap instead made names hop apart well before the pets
-  actually met. Sprite overlap only happens transiently while one pet
-  glides past the other, i.e. only at the moment they're actually crossing.
-  It runs every render tick: sorts pets left-to-right and, for any sprite
-  that horizontally overlaps the previous one, nudges that pet's name up an
-  extra 14px via `translateY` (cascading further for a third pet if one's
-  ever added), snapping back down the moment the sprites clear each other.
-  The XP/token "+N" drop
+  Each pet's name/title label renders **below** its sprite, positioned out
+  of flow (`position: absolute; top: 100%`) rather than as a second flex
+  child, so the sprite — the slot's only in-flow child — is what sizes and
+  anchors the slot's box. That keeps the sprite pinned at the exact same
+  vertical spot regardless of whether a name label is present, and the
+  `margin-top` gap between sprite and label leaves room for
+  `updateMascotNameStacking()` to lift an overlapping label without it
+  brushing the sprite above it. The slot's own `bottom` offset (`28px`, up
+  from an original `4px`) is what actually shifts the sprite up to make that
+  room — since `#mascot-widget` sits flush against the real viewport bottom,
+  the label needs genuine on-screen space below the sprite, not just space
+  inside an overflow-visible container. `#mascot-panel`'s own `bottom` was
+  bumped by the same amount (from `88px` to `112px`) to keep its original
+  clearance above the now-higher sprites. `updateMascotNameStacking()` keys
+  off the **name labels'** own live `getBoundingClientRect()`, not the
+  sprites' — an earlier version used sprite rects instead (reasoning that
+  `MIN_PET_SEPARATION_PX` already keeps resting sprite spots ~17px apart,
+  so sprite overlap only happens transiently while gliding past each other),
+  but a fixed sprite-width bound doesn't know about the label's actual
+  rendered width, which swings a lot: a bare short name is narrower than the
+  sprite itself, while an equipped title (badge + tier word) can be much
+  wider, so two labels could visibly overlap at a separation the
+  sprite-based check considered fine. Measuring the label's own rect instead
+  means the overlap bounds automatically extend when a wide title is
+  equipped and shrink back for a bare short name. `translateY` (the stacking
+  lift itself) only moves labels vertically, so re-measuring a label that's
+  already lifted from a previous tick still reports its true horizontal
+  extent, no chicken-and-egg problem. When nothing overlaps, every label
+  sits at level 0 (no offset), directly under its own sprite. When labels do
+  overlap, they stack vertically instead — the
+  **viewer's own pet's name always lifts to the top of the stack**
+  (`translateY(-14px)` per level via `NAME_STACK_OFFSET_PX`), regardless of
+  which side of the cluster it's actually standing on, with everyone else in
+  the cluster filling in below it in left-to-right order. This is the
+  inverse of an earlier version that stacked purely by left-to-right sprite
+  position — that made the same physical pet "jump" between top and bottom
+  of the stack depending on which side it approached from, which read as
+  arbitrary; keying off `widgetState.myPetKey` instead makes "my name is
+  always on top" a stable, viewer-relative rule, snapping back to level 0 the
+  moment the sprites clear each other. The XP/token "+N" drop
   popups (`showXpPopup`/`showTokenPopup`) spawn from that same name
   label's live bounding rect rather than the sprite's, so they always
   clear the label — including a stacked one — before floating upward,

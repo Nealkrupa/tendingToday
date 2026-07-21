@@ -196,10 +196,17 @@ field, AFK-block purchase buttons, and a large (180×180px) static preview
 **Wandering:** each pet glides to a random spot on the ground strip at a
 constant px/sec speed, rests 8–15s, repeats. Ground art is theme-aware
 (two pre-mounted, opacity-toggled tile layers). Name/title label renders
-above the sprite; `updateMascotNameStacking()` lifts a label higher only
-when the *sprites* (not the labels) are currently overlapping, to avoid
-premature separation. The viewer's own pet always paints on top when two
-sprites cross (`z-index` keyed to `widgetState.myPetKey`). A debounced
+below the sprite, out of flow, with the sprite itself shifted up (slot
+`bottom: 28px`) to leave genuine on-screen room for the label below it.
+`updateMascotNameStacking()` keys off the *labels'* own live
+`getBoundingClientRect()` (not the sprites'), so the overlap bounds
+automatically extend for a wide equipped title and shrink back for a bare
+short name: not overlapping → every label sits directly under its own
+sprite, no offset; overlapping → labels stack vertically with the
+**viewer's own pet's name always on top of the stack**
+(`widgetState.myPetKey`), other pet(s) filling in below it. The viewer's
+own pet also always paints on top when two sprites cross (`z-index` keyed
+to `widgetState.myPetKey`). A debounced
 resize listener re-clamps any pet that falls outside the ground's current
 walkable width.
 

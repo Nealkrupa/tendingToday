@@ -864,7 +864,7 @@
     #mascot-panel {
       position: fixed;
       right: 16px;
-      bottom: 88px;
+      bottom: 112px;
       pointer-events: auto;
       width: 300px;
       max-width: calc(100vw - 32px);
@@ -881,11 +881,16 @@
     #mascot-panel.mascot-open { display: block; }
     .mascot-slot {
       position: absolute;
-      bottom: 4px;
+      /* Shifted up from the ground's own bottom edge (used to be 4px) to
+         leave room below the sprite for the name label — the label is
+         positioned out of flow (see .mascot-slot-name below) so nothing
+         about the slot's own box reserves that space automatically.
+         Without this the label rendered past the viewport's bottom edge,
+         off-screen, since #mascot-widget sits flush against it. */
+      bottom: 28px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 2px;
       cursor: pointer;
       background: none;
       border: none;
@@ -900,7 +905,19 @@
        on tap and leave them "stuck" until a tap elsewhere, which is exactly
        the rectangle-flash effect being removed here, on both desktop and
        mobile. */
+    /* Positioned absolutely (out of flow) below the sprite rather than as a
+       second flex child, so the sprite — the slot's only in-flow child — is
+       still the sole thing sizing/anchoring the slot's box. That keeps the
+       sprite pinned at the exact same vertical spot whether or not a name
+       label is present below it. top: 100% plus margin-top is the gap that
+       preserves updateMascotNameStacking()'s room to lift an overlapping
+       label without it brushing the sprite above it. */
     .mascot-slot-name {
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      margin-top: 6px;
+      white-space: nowrap;
       font-size: 10px;
       font-weight: 700;
       color: var(--muted, #6B7568);
@@ -1979,7 +1996,7 @@
         // viewer's own pet above the other one here means "your pet is on
         // top" is true from wherever it's being looked at.
         slot.style.zIndex = key === widgetState.myPetKey ? '1' : '0';
-        slot.innerHTML = `<span class="mascot-slot-name"></span><div class="mascot-sprite-box" id="mascot-sprite-${key}"></div>`;
+        slot.innerHTML = `<div class="mascot-sprite-box" id="mascot-sprite-${key}"></div><span class="mascot-slot-name"></span>`;
         slot.addEventListener('click', () => {
           widgetState.expandedPet = widgetState.expandedPet === key ? null : key;
           widgetState.expandedSkill = null;
@@ -2014,34 +2031,73 @@
     renderPanel(pets);
   }
 
-  // Names now render above each sprite (see slot.innerHTML above) rather
-  // than below it. Triggered off the *sprites'* live overlap, not the name
-  // labels' — MIN_PET_SEPARATION_PX already keeps resting sprite spots ~17px
-  // apart, close enough that two wide title/name labels can brush without
-  // the pets themselves ever crossing, so checking label overlap instead
-  // made names hop apart well before the pets actually met. Sprite overlap
-  // only happens transiently while one pet glides past the other, which is
-  // exactly the "crossing" moment this should react to. Sorts pets
-  // left-to-right and lifts each name whose sprite horizontally overlaps the
-  // previous one an extra notch higher, cascading if three-plus pets ever
-  // bunch up. translateY only, so it never touches the horizontal `left`
-  // each name inherits from its slot.
+  // Names render below each sprite (see slot.innerHTML above), positioned
+  // out of flow so the sprite above never moves regardless of the label.
+  // Stacking is triggered off the *name labels'* own live overlap, not the
+  // sprites' — this used to be sprite-based (MIN_PET_SEPARATION_PX keeps
+  // resting sprite spots ~17px apart, so sprite overlap only happens
+  // transiently while one pet glides past the other), but a fixed
+  // sprite-width bound doesn't know about the label's actual rendered
+  // width, which swings a lot: a bare short name is narrower than the
+  // sprite itself, while an equipped title (badge + tier word) can be much
+  // wider. Measuring the label's own `getBoundingClientRect()` instead means
+  // the overlap bounds automatically extend when a wide title is equipped
+  // and shrink back for a bare short name, rather than a bound sized for
+  // one case being wrong for the other. `translateY` (the stacking lift
+  // itself) only moves labels vertically, so re-measuring a label that's
+  // already lifted from a previous tick still reports its true horizontal
+  // extent.
+  //
+  // Not overlapping: every name sits at level 0, directly under its own
+  // sprite, no offset. Overlapping: names within that overlap cluster stack
+  // vertically instead of drifting apart horizontally, with the *viewer's
+  // own* pet's name always lifted highest (top of the stack) regardless of
+  // which side of the cluster it's actually standing on — the other pet(s)
+  // in the cluster fill in below it, left-to-right. This deliberately
+  // ignores position for the ordering (only using it to detect clusters),
+  // the inverse of an earlier version that stacked purely by left-to-right
+  // order. The base `translateX(-50%)` (matching the label's own
+  // `left: 50%`) has to be re-applied alongside translateY on every update
+  // since this assignment replaces the whole `transform`, not just one axis.
   const NAME_STACK_OFFSET_PX = 14;
   function updateMascotNameStacking() {
     const entries = PET_KEYS.map((key) => {
       const slot = document.getElementById('mascot-slot-' + key);
       const nameEl = slot && slot.querySelector('.mascot-slot-name');
-      const spriteBox = slot && slot.querySelector('.mascot-sprite-box');
-      return (nameEl && spriteBox) ? { nameEl, spriteBox } : null;
+      return nameEl ? { key, nameEl } : null;
     }).filter(Boolean);
-    entries.sort((a, b) => a.spriteBox.getBoundingClientRect().left - b.spriteBox.getBoundingClientRect().left);
+    entries.sort((a, b) => a.nameEl.getBoundingClientRect().left - b.nameEl.getBoundingClientRect().left);
+
+    // Group into clusters of mutually-overlapping (by label rect) entries.
+    const clusters = [];
+    let current = [];
     let prevRect = null;
-    let level = 0;
     entries.forEach((entry) => {
-      const rect = entry.spriteBox.getBoundingClientRect();
-      level = (prevRect && rect.left < prevRect.right) ? level + 1 : 0;
-      entry.nameEl.style.transform = level ? 'translateY(-' + (NAME_STACK_OFFSET_PX * level) + 'px)' : '';
+      const rect = entry.nameEl.getBoundingClientRect();
+      if (prevRect && rect.left < prevRect.right) {
+        current.push(entry);
+      } else {
+        if (current.length) clusters.push(current);
+        current = [entry];
+      }
       prevRect = rect;
+    });
+    if (current.length) clusters.push(current);
+
+    clusters.forEach((cluster) => {
+      if (cluster.length < 2) {
+        cluster[0].nameEl.style.transform = 'translateX(-50%)';
+        return;
+      }
+      // Own pet goes last so it lands on the highest level (most lift);
+      // everyone else keeps their left-to-right order beneath it.
+      const others = cluster.filter((e) => e.key !== widgetState.myPetKey);
+      const mine = cluster.find((e) => e.key === widgetState.myPetKey);
+      const ordered = mine ? [...others, mine] : cluster;
+      ordered.forEach((entry, level) => {
+        const lift = level ? ' translateY(-' + (NAME_STACK_OFFSET_PX * level) + 'px)' : '';
+        entry.nameEl.style.transform = 'translateX(-50%)' + lift;
+      });
     });
   }
 
